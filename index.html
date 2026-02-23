@@ -23,6 +23,7 @@
                     <li><a href="#kontakt">Kontakt</a></li>
                 </ul>
                 <div class="nav-buttons">
+                    <span id="loggedInAs" style="display:none; align-items:center; color: var(--gray-dark); font-weight: 600;"></span>
                     <button class="btn-secondary" id="loginBtn" onclick="window.location.href='login.html'">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
@@ -315,8 +316,25 @@
                     return;
                 }
 
+                let currentUser = null;
+                try {
+                    const userResponse = await fetch(`${API_BASE}/api/user`);
+                    if (userResponse.ok) {
+                        currentUser = await userResponse.json();
+                    }
+                } catch (userError) {
+                    console.error('Fehler beim Laden des Benutzers:', userError);
+                }
+
                 const loginBtn = document.getElementById('loginBtn');
                 const registerBtn = document.getElementById('registerBtn');
+                const loggedInAs = document.getElementById('loggedInAs');
+
+                if (loggedInAs && currentUser) {
+                    const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
+                    loggedInAs.textContent = `Eingeloggt als: ${fullName || currentUser.email || 'Benutzer'}`;
+                    loggedInAs.style.display = 'inline-flex';
+                }
 
                 if (loginBtn) {
                     loginBtn.innerHTML = '<i class="fas fa-tachometer-alt"></i> Dashboard';
