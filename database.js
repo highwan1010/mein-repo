@@ -156,12 +156,36 @@ const initPostgres = async () => {
 
         CREATE TABLE IF NOT EXISTS chats (
             id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            conversation_id TEXT NOT NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            visitor_vorname TEXT,
+            visitor_nachname TEXT,
+            visitor_email TEXT,
             admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             nachricht TEXT NOT NULL,
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             aktualisiert_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+    `);
+
+    await pgPool.query(`
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_vorname TEXT;
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_nachname TEXT;
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_email TEXT;
+        ALTER TABLE chats ALTER COLUMN user_id DROP NOT NULL;
+
+        UPDATE chats
+        SET conversation_id = COALESCE(conversation_id, CONCAT('legacy-', COALESCE(user_id::TEXT, id::TEXT)));
+
+        UPDATE chats c
+        SET visitor_vorname = COALESCE(c.visitor_vorname, u.vorname),
+            visitor_nachname = COALESCE(c.visitor_nachname, u.nachname),
+            visitor_email = COALESCE(c.visitor_email, u.email)
+        FROM users u
+        WHERE c.user_id = u.id;
+
+        ALTER TABLE chats ALTER COLUMN conversation_id SET NOT NULL;
     `);
 
     console.log('✅ Postgres-Datenbank initialisiert');
@@ -201,6 +225,21 @@ const ensureFileStoreShape = (data) => {
             }, 0);
         }
     }
+
+    nextData.chats = nextData.chats.map((chat, index) => {
+        const fallbackConversationId = `legacy-${chat?.user_id ? String(chat.user_id) : String(index + 1)}`;
+        const hasUserId = chat?.user_id !== null && chat?.user_id !== undefined && String(chat.user_id).trim() !== '';
+        const hasAdminId = chat?.admin_id !== null && chat?.admin_id !== undefined && String(chat.admin_id).trim() !== '';
+        return {
+            ...chat,
+            conversation_id: String(chat?.conversation_id || fallbackConversationId),
+            user_id: hasUserId && Number.isInteger(Number(chat.user_id)) ? Number(chat.user_id) : null,
+            visitor_vorname: chat?.visitor_vorname ? String(chat.visitor_vorname) : null,
+            visitor_nachname: chat?.visitor_nachname ? String(chat.visitor_nachname) : null,
+            visitor_email: chat?.visitor_email ? String(chat.visitor_email) : null,
+            admin_id: hasAdminId && Number.isInteger(Number(chat.admin_id)) ? Number(chat.admin_id) : null
+        };
+    });
 
     return nextData;
 };
@@ -985,13 +1024,29 @@ const updateTaskStatusForUser = async (taskId, userId, status) => {
     return db.tasks[index];
 };
 
-const createChatMessage = async (userId, nachricht, adminId = null) => {
+const createChatMessage = async ({
+    conversationId,
+    nachricht,
+    userId = null,
+    adminId = null,
+    visitorVorname = null,
+    visitorNachname = null,
+    visitorEmail = null
+}) => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
-            `INSERT INTO chats (user_id, admin_id, nachricht)
-             VALUES ($1, $2, $3)
+            `INSERT INTO chats (conversation_id, user_id, admin_id, visitor_vorname, visitor_nachname, visitor_email, nachricht)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *`,
-            [Number(userId), adminId ? Number(adminId) : null, String(nachricht)]
+            [
+                String(conversationId),
+                userId ? Number(userId) : null,
+                adminId ? Number(adminId) : null,
+                visitorVorname ? String(visitorVorname) : null,
+                visitorNachname ? String(visitorNachname) : null,
+                visitorEmail ? String(visitorEmail) : null,
+                String(nachricht)
+            ]
         );
         return result.rows[0];
     }
@@ -1000,8 +1055,12 @@ const createChatMessage = async (userId, nachricht, adminId = null) => {
     const id = nextId(db, 'chats');
     const entry = {
         id,
-        user_id: Number(userId),
+        conversation_id: String(conversationId),
+        user_id: userId ? Number(userId) : null,
         admin_id: adminId ? Number(adminId) : null,
+        visitor_vorname: visitorVorname ? String(visitorVorname) : null,
+        visitor_nachname: visitorNachname ? String(visitorNachname) : null,
+        visitor_email: visitorEmail ? String(visitorEmail) : null,
         nachricht: String(nachricht),
         erstellt_am: nowIso(),
         aktualisiert_am: nowIso()
@@ -1012,15 +1071,17 @@ const createChatMessage = async (userId, nachricht, adminId = null) => {
     return entry;
 };
 
-const getChatMessagesByUser = async (userId) => {
+const getChatMessagesByConversation = async (conversationId) => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
-            `SELECT c.*, a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
+            `SELECT c.*, a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email,
+                    u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email
              FROM chats c
              LEFT JOIN users a ON a.id = c.admin_id
-             WHERE c.user_id = $1
+             LEFT JOIN users u ON u.id = c.user_id
+             WHERE c.conversation_id = $1
              ORDER BY c.erstellt_am ASC`,
-            [Number(userId)]
+            [String(conversationId)]
         );
 
         return result.rows;
@@ -1028,14 +1089,18 @@ const getChatMessagesByUser = async (userId) => {
 
     const db = readDb();
     return (db.chats || [])
-        .filter((chat) => Number(chat.user_id) === Number(userId))
+        .filter((chat) => String(chat.conversation_id) === String(conversationId))
         .map((chat) => {
             const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
+            const user = db.users.find((entry) => Number(entry.id) === Number(chat.user_id)) || {};
             return {
                 ...chat,
                 admin_vorname: admin.vorname || null,
                 admin_nachname: admin.nachname || null,
-                admin_email: admin.email || null
+                admin_email: admin.email || null,
+                user_vorname: user.vorname || null,
+                user_nachname: user.nachname || null,
+                user_email: user.email || null
             };
         })
         .sort((left, right) => new Date(left.erstellt_am) - new Date(right.erstellt_am));
@@ -1044,7 +1109,7 @@ const getChatMessagesByUser = async (userId) => {
 const getAllChatsAdmin = async () => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
-            `SELECT c.*, u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email,
+                `SELECT c.*, u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email,
                     a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
              FROM chats c
              LEFT JOIN users u ON u.id = c.user_id
@@ -1071,6 +1136,54 @@ const getAllChatsAdmin = async () => {
             };
         })
         .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const getChatConversationsAdmin = async () => {
+    const messages = await getAllChatsAdmin();
+    const grouped = new Map();
+
+    for (const message of messages) {
+        const conversationId = String(message.conversation_id || `legacy-${message.user_id || message.id}`);
+        if (!grouped.has(conversationId)) {
+            grouped.set(conversationId, {
+                conversation_id: conversationId,
+                user_id: message.user_id || null,
+                visitor_vorname: message.visitor_vorname || message.user_vorname || null,
+                visitor_nachname: message.visitor_nachname || message.user_nachname || null,
+                visitor_email: message.visitor_email || message.user_email || null,
+                letzte_nachricht: message.nachricht || '',
+                letzte_nachricht_am: message.erstellt_am,
+                letzte_nachricht_von_admin: Boolean(message.admin_id),
+                anzahl_nachrichten: 1
+            });
+            continue;
+        }
+
+        const current = grouped.get(conversationId);
+        current.anzahl_nachrichten += 1;
+        if (!current.letzte_nachricht_am || new Date(message.erstellt_am) > new Date(current.letzte_nachricht_am)) {
+            current.letzte_nachricht = message.nachricht || '';
+            current.letzte_nachricht_am = message.erstellt_am;
+            current.letzte_nachricht_von_admin = Boolean(message.admin_id);
+        }
+
+        if (!current.visitor_vorname && (message.visitor_vorname || message.user_vorname)) {
+            current.visitor_vorname = message.visitor_vorname || message.user_vorname || null;
+        }
+        if (!current.visitor_nachname && (message.visitor_nachname || message.user_nachname)) {
+            current.visitor_nachname = message.visitor_nachname || message.user_nachname || null;
+        }
+        if (!current.visitor_email && (message.visitor_email || message.user_email)) {
+            current.visitor_email = message.visitor_email || message.user_email || null;
+        }
+        if (!current.user_id && message.user_id) {
+            current.user_id = message.user_id;
+        }
+    }
+
+    return Array.from(grouped.values()).sort(
+        (left, right) => new Date(right.letzte_nachricht_am || 0) - new Date(left.letzte_nachricht_am || 0)
+    );
 };
 
 const getChatById = async (chatId) => {
@@ -1385,8 +1498,9 @@ module.exports = {
     getAllTasksAdmin,
     updateTaskStatusForUser,
     createChatMessage,
-    getChatMessagesByUser,
+    getChatMessagesByConversation,
     getAllChatsAdmin,
+    getChatConversationsAdmin,
     getChatById,
     updateChatMessageByAdmin,
     getAllJobsAdmin,

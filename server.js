@@ -43,8 +43,8 @@ const {
     getAllTasksAdmin,
     updateTaskStatusForUser,
     createChatMessage,
-    getChatMessagesByUser,
-    getAllChatsAdmin,
+    getChatMessagesByConversation,
+    getChatConversationsAdmin,
     getChatById,
     updateChatMessageByAdmin,
     getAllJobsAdmin,
@@ -326,6 +326,55 @@ const loginRateLimiter = rateLimit({
     message: { error: 'Zu viele Login-Versuche. Bitte später erneut versuchen.' }
 });
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeConversationId = (value) => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return text.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+};
+
+const createConversationId = () => {
+    if (typeof crypto.randomUUID === 'function') {
+        return `chat_${crypto.randomUUID().replace(/-/g, '')}`;
+    }
+
+    return `chat_${crypto.randomBytes(16).toString('hex')}`;
+};
+
+const sanitizeChatIdentity = (input = {}) => {
+    const vorname = String(input.vorname || '').trim();
+    const nachname = String(input.nachname || '').trim();
+    const email = String(input.email || '').trim().toLowerCase();
+
+    if (!vorname || !nachname || !email) {
+        throw new Error('Vorname, Nachname und E-Mail sind erforderlich');
+    }
+
+    if (!EMAIL_REGEX.test(email)) {
+        throw new Error('Ungültige E-Mail-Adresse');
+    }
+
+    return { vorname, nachname, email };
+};
+
+const getSessionChatIdentity = (req) => {
+    if (!req.session || !req.session.chatIdentity) {
+        return null;
+    }
+
+    const value = req.session.chatIdentity;
+    if (!value.vorname || !value.nachname || !value.email) {
+        return null;
+    }
+
+    return {
+        vorname: String(value.vorname).trim(),
+        nachname: String(value.nachname).trim(),
+        email: String(value.email).trim().toLowerCase()
+    };
+};
+
 // ===== AUTH ROUTES =====
 
 // Registrierung
@@ -345,8 +394,7 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
+        if (!EMAIL_REGEX.test(email)) {
             return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
         }
 
@@ -763,18 +811,51 @@ app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
 
 // ===== LIVECHAT ROUTES =====
 
-app.get('/api/chat/messages', requireAuth, async (req, res) => {
+app.post('/api/chat/session', async (req, res) => {
     try {
-        const messages = await getChatMessagesByUser(req.authUserId);
-        res.json({ success: true, messages });
+        const identity = sanitizeChatIdentity(req.body || {});
+        const requestedConversationId = normalizeConversationId(req.body && req.body.conversationId);
+        const conversationId = requestedConversationId || createConversationId();
+
+        if (req.session) {
+            req.session.chatConversationId = conversationId;
+            req.session.chatIdentity = identity;
+        }
+
+        res.json({ success: true, conversationId, identity });
+    } catch (error) {
+        res.status(400).json({ error: error.message || 'Ungültige Chat-Daten' });
+    }
+});
+
+app.get('/api/chat/messages', async (req, res) => {
+    try {
+        const requestedConversationId = normalizeConversationId(req.query && req.query.conversationId);
+        const conversationId = requestedConversationId
+            || normalizeConversationId(req.session && req.session.chatConversationId);
+
+        if (!conversationId) {
+            return res.status(400).json({ error: 'Chat-Session fehlt. Bitte Chat neu starten.' });
+        }
+
+        const messages = await getChatMessagesByConversation(conversationId);
+        res.json({ success: true, conversationId, messages });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Chat-Nachrichten' });
     }
 });
 
-app.post('/api/chat/messages', requireAuth, async (req, res) => {
+app.post('/api/chat/messages', async (req, res) => {
     try {
+        const requestedConversationId = normalizeConversationId(req.body && req.body.conversationId);
+        const conversationId = requestedConversationId
+            || normalizeConversationId(req.session && req.session.chatConversationId);
         const text = String((req.body && req.body.nachricht) || '').trim();
+
+        if (!conversationId) {
+            return res.status(400).json({ error: 'Chat-Session fehlt. Bitte Chat neu starten.' });
+        }
+
         if (!text) {
             return res.status(400).json({ error: 'Nachricht ist erforderlich' });
         }
@@ -783,7 +864,42 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Nachricht ist zu lang (max. 1200 Zeichen)' });
         }
 
-        const message = await createChatMessage(req.authUserId, text);
+        let identity = null;
+        try {
+            identity = sanitizeChatIdentity(req.body || {});
+        } catch {
+            identity = getSessionChatIdentity(req);
+        }
+
+        if (!identity && req.authUserId) {
+            const user = await findUserById(req.authUserId);
+            if (user) {
+                identity = {
+                    vorname: user.vorname,
+                    nachname: user.nachname,
+                    email: String(user.email || '').toLowerCase()
+                };
+            }
+        }
+
+        if (!identity) {
+            return res.status(400).json({ error: 'Vorname, Nachname und E-Mail sind erforderlich' });
+        }
+
+        if (req.session) {
+            req.session.chatConversationId = conversationId;
+            req.session.chatIdentity = identity;
+        }
+
+        const message = await createChatMessage({
+            conversationId,
+            nachricht: text,
+            userId: req.authUserId || null,
+            adminId: null,
+            visitorVorname: identity.vorname,
+            visitorNachname: identity.nachname,
+            visitorEmail: identity.email
+        });
         res.json({ success: true, message });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Senden der Nachricht' });
@@ -862,8 +978,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Ungültiger Benutzer-Typ' });
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(String(email).trim())) {
+        if (!EMAIL_REGEX.test(String(email).trim())) {
             return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
         }
 
@@ -1061,10 +1176,24 @@ app.post('/api/admin/tasks', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/chats', requireAdmin, async (req, res) => {
     try {
-        const chats = await getAllChatsAdmin();
-        res.json({ success: true, chats });
+        const conversations = await getChatConversationsAdmin();
+        res.json({ success: true, conversations });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Livechats' });
+    }
+});
+
+app.get('/api/admin/chats/:conversationId/messages', requireAdmin, async (req, res) => {
+    try {
+        const conversationId = normalizeConversationId(req.params.conversationId);
+        if (!conversationId) {
+            return res.status(400).json({ error: 'Ungültige Konversation' });
+        }
+
+        const messages = await getChatMessagesByConversation(conversationId);
+        res.json({ success: true, conversationId, messages });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Chat-Nachrichten' });
     }
 });
 
@@ -1096,13 +1225,13 @@ app.put('/api/admin/chats/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/chats/:id/reply', requireAdmin, async (req, res) => {
+app.post('/api/admin/chats/:conversationId/reply', requireAdmin, async (req, res) => {
     try {
-        const chatId = Number(req.params.id);
+        const conversationId = normalizeConversationId(req.params.conversationId);
         const text = String((req.body && req.body.nachricht) || '').trim();
 
-        if (!Number.isInteger(chatId) || chatId <= 0) {
-            return res.status(400).json({ error: 'Ungültige Chat-ID' });
+        if (!conversationId) {
+            return res.status(400).json({ error: 'Ungültige Konversation' });
         }
 
         if (!text) {
@@ -1113,12 +1242,21 @@ app.post('/api/admin/chats/:id/reply', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Antwort ist zu lang (max. 1200 Zeichen)' });
         }
 
-        const sourceChat = await getChatById(chatId);
-        if (!sourceChat) {
-            return res.status(404).json({ error: 'Chat-Nachricht nicht gefunden' });
+        const conversationMessages = await getChatMessagesByConversation(conversationId);
+        const latestMessage = conversationMessages[conversationMessages.length - 1];
+        if (!latestMessage) {
+            return res.status(404).json({ error: 'Konversation nicht gefunden' });
         }
 
-        const reply = await createChatMessage(sourceChat.user_id, text, req.currentAdmin.id);
+        const reply = await createChatMessage({
+            conversationId,
+            nachricht: text,
+            userId: latestMessage.user_id || null,
+            adminId: req.currentAdmin.id,
+            visitorVorname: latestMessage.visitor_vorname || latestMessage.user_vorname || null,
+            visitorNachname: latestMessage.visitor_nachname || latestMessage.user_nachname || null,
+            visitorEmail: latestMessage.visitor_email || latestMessage.user_email || null
+        });
         res.json({ success: true, message: reply });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Senden der Antwort' });

@@ -6,6 +6,155 @@
     <title>Admin Panel - JobVermittlung</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        .chat-admin-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 14px;
+            min-height: 540px;
+        }
+
+        .chat-admin-sidebar {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 8px;
+            overflow-y: auto;
+            max-height: 620px;
+            background: var(--white);
+        }
+
+        .chat-thread-item {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--white);
+            text-align: left;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .chat-thread-item.active {
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .chat-thread-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .chat-thread-top small,
+        .chat-thread-meta,
+        .chat-thread-preview {
+            color: var(--gray);
+            font-size: 12px;
+        }
+
+        .chat-thread-preview {
+            margin-top: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            white-space: normal;
+        }
+
+        .chat-admin-main {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            min-height: 540px;
+            background: var(--white);
+        }
+
+        .chat-admin-header {
+            border-bottom: 1px solid var(--border);
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .chat-admin-header small { color: var(--gray); }
+
+        .chat-admin-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: var(--light);
+        }
+
+        .chat-message {
+            max-width: 78%;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            white-space: pre-wrap;
+        }
+
+        .chat-message-admin {
+            margin-left: auto;
+            background: var(--light);
+            border-color: var(--primary);
+        }
+
+        .chat-message-visitor {
+            margin-right: auto;
+            background: var(--white);
+        }
+
+        .chat-message-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
+            color: var(--gray);
+            font-size: 12px;
+        }
+
+        .chat-message-text {
+            color: var(--dark);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .chat-message-actions {
+            margin-top: 8px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .chat-admin-form {
+            border-top: 1px solid var(--border);
+            padding: 12px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+        }
+
+        .chat-empty {
+            color: var(--gray);
+            text-align: center;
+            padding: 22px;
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            background: var(--white);
+        }
+
+        @media (max-width: 980px) {
+            .chat-admin-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -287,7 +436,11 @@
             : '';
         let adminUsers = [];
         let adminJobs = [];
-        let adminChats = [];
+        let adminChatThreads = [];
+        let activeChatConversationId = '';
+        let activeChatMessages = [];
+        let editingChatMessageId = null;
+        let adminChatPollHandle = null;
         let editContext = null;
 
         function escapeHtml(value) {
@@ -654,79 +807,179 @@
             `;
         }
 
-        function renderChats(chats) {
-            if (!chats.length) return '<p>Keine Livechats vorhanden.</p>';
+        function getChatDisplayName(conversation) {
+            const fullName = `${conversation.visitor_vorname || ''} ${conversation.visitor_nachname || ''}`.trim();
+            return fullName || conversation.visitor_email || 'Unbekannt';
+        }
+
+        function renderChatThreads() {
+            if (!adminChatThreads.length) {
+                return '<div class="empty-state"><i class="fas fa-comments"></i><p>Keine Livechats vorhanden.</p></div>';
+            }
+
+            return adminChatThreads.map((conversation) => {
+                const active = String(conversation.conversation_id) === String(activeChatConversationId);
+                const senderLabel = conversation.letzte_nachricht_von_admin ? 'Admin' : 'Besucher';
+                return `
+                    <button type="button" class="chat-thread-item ${active ? 'active' : ''}" onclick="openAdminConversation('${escapeHtml(conversation.conversation_id)}')">
+                        <div class="chat-thread-top">
+                            <strong>${escapeHtml(getChatDisplayName(conversation))}</strong>
+                            <small>${escapeHtml(formatDate(conversation.letzte_nachricht_am))}</small>
+                        </div>
+                        <div class="chat-thread-meta">${escapeHtml(conversation.visitor_email || 'Keine E-Mail')}</div>
+                        <div class="chat-thread-preview">${escapeHtml(senderLabel)}: ${escapeHtml(conversation.letzte_nachricht || '')}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderChatMessages(messages) {
+            if (!messages.length) {
+                return '<div class="chat-empty">Noch keine Nachrichten in dieser Konversation.</div>';
+            }
+
+            return messages.map((message) => {
+                const isAdmin = Boolean(message.admin_id);
+                const isEditable = isAdmin;
+                const label = isAdmin ? 'Admin' : (message.visitor_vorname || message.user_vorname || 'Besucher');
+                const bubbleClass = isAdmin ? 'chat-message chat-message-admin' : 'chat-message chat-message-visitor';
+                return `
+                    <div class="${bubbleClass}">
+                        <div class="chat-message-head">
+                            <span>${escapeHtml(label)}</span>
+                            <small>${escapeHtml(formatDate(message.erstellt_am))}</small>
+                        </div>
+                        <div class="chat-message-text">${escapeHtml(message.nachricht || '')}</div>
+                        ${isEditable ? `<div class="chat-message-actions"><button type="button" class="btn-secondary" onclick="startEditChatMessage(${Number(message.id)})">Bearbeiten</button></div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderChats() {
+            const activeConversation = adminChatThreads.find(
+                (conversation) => String(conversation.conversation_id) === String(activeChatConversationId)
+            );
+            const conversationTitle = activeConversation ? getChatDisplayName(activeConversation) : 'Konversation auswählen';
+            const submitLabel = editingChatMessageId ? 'Änderung speichern' : 'Antwort senden';
+
             return `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nutzer</th>
-                            <th>Sender</th>
-                            <th>Nachricht</th>
-                            <th>Erstellt</th>
-                            <th>Aktion</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${chats.map((chat) => {
-                            const userName = `${chat.user_vorname || ''} ${chat.user_nachname || ''}`.trim() || chat.user_email || '—';
-                            const sender = chat.admin_id ? (`Admin: ${chat.admin_vorname || ''} ${chat.admin_nachname || ''}`.trim() || chat.admin_email || 'Admin') : 'Bewerber';
-                            const messagePreview = String(chat.nachricht || '—');
-                            return `
-                            <tr>
-                                <td>${chat.id}</td>
-                                <td>${escapeHtml(userName)}</td>
-                                <td>${escapeHtml(sender)}</td>
-                                <td style="max-width: 340px; white-space: pre-wrap;">${escapeHtml(messagePreview)}</td>
-                                <td>${formatDate(chat.erstellt_am)}</td>
-                                <td>
-                                    <button class="btn-secondary" onclick="editChatMessage(${chat.id})">Bearbeiten</button>
-                                    <button class="btn-primary" style="margin-left:8px;" onclick="replyToChat(${chat.id})">Antworten</button>
-                                </td>
-                            </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
+                <div class="chat-admin-layout">
+                    <aside class="chat-admin-sidebar" id="chatThreadList">
+                        ${renderChatThreads()}
+                    </aside>
+                    <section class="chat-admin-main">
+                        <div class="chat-admin-header">
+                            <strong>${escapeHtml(conversationTitle)}</strong>
+                            <small>${escapeHtml(activeConversation?.visitor_email || '')}</small>
+                        </div>
+                        <div class="chat-admin-messages" id="chatMessageList">
+                            ${renderChatMessages(activeChatMessages)}
+                        </div>
+                        <form id="chatReplyForm" class="chat-admin-form">
+                            <input class="form-input" id="chatReplyInput" type="text" maxlength="1200" placeholder="Nachricht schreiben..." ${activeConversation ? '' : 'disabled'} />
+                            <button class="btn-primary" type="submit" ${activeConversation ? '' : 'disabled'}>${submitLabel}</button>
+                        </form>
+                    </section>
+                </div>
             `;
         }
 
-        async function editChatMessage(chatId) {
-            const target = adminChats.find((entry) => Number(entry.id) === Number(chatId));
-            if (!target) {
-                alert('Chat nicht gefunden.');
-                return;
-            }
-
-            const nextText = prompt('Chat-Nachricht bearbeiten:', target.nachricht || '');
-            if (nextText === null) return;
-
-            try {
-                await api(`/api/admin/chats/${chatId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nachricht: String(nextText).trim() })
-                });
-                await loadAdminData();
-            } catch (error) {
-                alert(error.message || 'Fehler beim Bearbeiten der Nachricht.');
+        async function openAdminConversation(conversationId) {
+            activeChatConversationId = String(conversationId || '');
+            editingChatMessageId = null;
+            await refreshActiveConversationMessages();
+            document.getElementById('chatsTable').innerHTML = renderChats();
+            bindChatReplyForm();
+            const messageList = document.getElementById('chatMessageList');
+            if (messageList) {
+                messageList.scrollTop = messageList.scrollHeight;
             }
         }
 
-        async function replyToChat(chatId) {
-            const reply = prompt('Antwort eingeben:');
-            if (reply === null) return;
+        async function refreshActiveConversationMessages() {
+            if (!activeChatConversationId) {
+                activeChatMessages = [];
+                return;
+            }
 
-            try {
-                await api(`/api/admin/chats/${chatId}/reply`, {
+            const result = await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/messages`);
+            activeChatMessages = result.messages || [];
+        }
+
+        function startEditChatMessage(chatId) {
+            const target = activeChatMessages.find((entry) => Number(entry.id) === Number(chatId));
+            if (!target) return;
+
+            editingChatMessageId = Number(chatId);
+            const input = document.getElementById('chatReplyInput');
+            if (input) {
+                input.value = target.nachricht || '';
+                input.focus();
+            }
+            const submitBtn = document.querySelector('#chatReplyForm button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.textContent = 'Änderung speichern';
+            }
+        }
+
+        async function submitChatReply(event) {
+            event.preventDefault();
+            if (!activeChatConversationId) return;
+
+            const input = document.getElementById('chatReplyInput');
+            const text = String(input?.value || '').trim();
+            if (!text) return;
+
+            if (editingChatMessageId) {
+                await api(`/api/admin/chats/${editingChatMessageId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nachricht: text })
+                });
+            } else {
+                await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/reply`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nachricht: String(reply).trim() })
+                    body: JSON.stringify({ nachricht: text })
                 });
-                await loadAdminData();
-            } catch (error) {
-                alert(error.message || 'Fehler beim Senden der Antwort.');
+            }
+
+            input.value = '';
+            editingChatMessageId = null;
+            await refreshChatDataOnly();
+            await openAdminConversation(activeChatConversationId);
+        }
+
+        function bindChatReplyForm() {
+            const form = document.getElementById('chatReplyForm');
+            if (!form) return;
+            form.addEventListener('submit', async (event) => {
+                try {
+                    await submitChatReply(event);
+                } catch (error) {
+                    alert(error.message || 'Fehler beim Senden der Nachricht.');
+                }
+            });
+        }
+
+        async function refreshChatDataOnly() {
+            const chatsRes = await api('/api/admin/chats');
+            adminChatThreads = chatsRes.conversations || [];
+
+            if (!adminChatThreads.length) {
+                activeChatConversationId = '';
+                activeChatMessages = [];
+                return;
+            }
+
+            const stillExists = adminChatThreads.some(
+                (conversation) => String(conversation.conversation_id) === String(activeChatConversationId)
+            );
+
+            if (!stillExists) {
+                activeChatConversationId = String(adminChatThreads[0].conversation_id);
+                activeChatMessages = [];
             }
         }
 
@@ -748,14 +1001,29 @@
 
             adminUsers = usersRes.users || [];
             adminJobs = jobsRes.jobs || [];
-            adminChats = chatsRes.chats || [];
+            adminChatThreads = chatsRes.conversations || [];
+
+            const hasActiveConversation = adminChatThreads.some(
+                (conversation) => String(conversation.conversation_id) === String(activeChatConversationId)
+            );
+            if (!hasActiveConversation) {
+                activeChatConversationId = adminChatThreads.length
+                    ? String(adminChatThreads[0].conversation_id)
+                    : '';
+                activeChatMessages = [];
+            }
+
+            if (activeChatConversationId) {
+                await refreshActiveConversationMessages();
+            }
 
             document.getElementById('usersTable').innerHTML = renderUsers(usersRes.users);
             document.getElementById('jobsTable').innerHTML = renderJobs(jobsRes.jobs);
             document.getElementById('bewerbungenTable').innerHTML = renderBewerbungen(bewerbungenRes.bewerbungen);
             document.getElementById('tasksTable').innerHTML = renderTasks(tasksRes.tasks);
             document.getElementById('favoritenTable').innerHTML = renderFavoriten(favoritenRes.favoriten);
-            document.getElementById('chatsTable').innerHTML = renderChats(chatsRes.chats || []);
+            document.getElementById('chatsTable').innerHTML = renderChats();
+            bindChatReplyForm();
             populateTaskAssigneeOptions(usersRes.users);
         }
 
@@ -878,6 +1146,27 @@
                 if (!ok) return;
                 switchAdminTab('jobs');
                 await loadAdminData();
+
+                if (adminChatPollHandle) {
+                    clearInterval(adminChatPollHandle);
+                }
+
+                adminChatPollHandle = setInterval(async () => {
+                    try {
+                        await refreshChatDataOnly();
+                        if (activeChatConversationId) {
+                            await refreshActiveConversationMessages();
+                        }
+
+                        const chatsTable = document.getElementById('chatsTable');
+                        if (chatsTable) {
+                            chatsTable.innerHTML = renderChats();
+                            bindChatReplyForm();
+                        }
+                    } catch {
+                        // polling errors are ignored to keep the UI responsive
+                    }
+                }, 3000);
             } catch (error) {
                 alert(error.message);
             }
