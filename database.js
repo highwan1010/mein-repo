@@ -1144,8 +1144,7 @@ const getAllChatsAdmin = async () => {
         .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
 };
 
-const getChatConversationsAdmin = async () => {
-    const messages = await getAllChatsAdmin();
+const aggregateChatConversations = (messages = []) => {
     const grouped = new Map();
 
     for (const message of messages) {
@@ -1192,6 +1191,72 @@ const getChatConversationsAdmin = async () => {
     return Array.from(grouped.values()).sort(
         (left, right) => new Date(right.letzte_nachricht_am || 0) - new Date(left.letzte_nachricht_am || 0)
     );
+};
+
+const getChatConversationsByUser = async ({ userId = null, email = null } = {}) => {
+    const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
+
+    if (!userId && !normalizedEmail) {
+        return [];
+    }
+
+    if (USE_POSTGRES) {
+        const whereParts = [];
+        const values = [];
+
+        if (userId) {
+            values.push(Number(userId));
+            whereParts.push(`c.user_id = $${values.length}`);
+        }
+
+        if (normalizedEmail) {
+            values.push(normalizedEmail);
+            whereParts.push(`LOWER(COALESCE(c.visitor_email, '')) = $${values.length}`);
+        }
+
+        const result = await pgPool.query(
+            `SELECT c.*, a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email,
+                    u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email
+             FROM chats c
+             LEFT JOIN users a ON a.id = c.admin_id
+             LEFT JOIN users u ON u.id = c.user_id
+             WHERE ${whereParts.join(' OR ')}
+             ORDER BY c.erstellt_am DESC`,
+            values
+        );
+
+        return aggregateChatConversations(result.rows || []);
+    }
+
+    const db = readDb();
+    const messages = (db.chats || [])
+        .filter((chat) => {
+            const matchesUser = userId ? Number(chat.user_id) === Number(userId) : false;
+            const matchesEmail = normalizedEmail
+                ? String(chat.visitor_email || '').trim().toLowerCase() === normalizedEmail
+                : false;
+            return matchesUser || matchesEmail;
+        })
+        .map((chat) => {
+            const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
+            const user = db.users.find((entry) => Number(entry.id) === Number(chat.user_id)) || {};
+            return {
+                ...chat,
+                admin_vorname: admin.vorname || null,
+                admin_nachname: admin.nachname || null,
+                admin_email: admin.email || null,
+                user_vorname: user.vorname || null,
+                user_nachname: user.nachname || null,
+                user_email: user.email || null
+            };
+        });
+
+    return aggregateChatConversations(messages);
+};
+
+const getChatConversationsAdmin = async () => {
+    const messages = await getAllChatsAdmin();
+    return aggregateChatConversations(messages);
 };
 
 const getChatById = async (chatId) => {
@@ -1507,6 +1572,7 @@ module.exports = {
     updateTaskStatusForUser,
     createChatMessage,
     getChatMessagesByConversation,
+    getChatConversationsByUser,
     getAllChatsAdmin,
     getChatConversationsAdmin,
     getChatById,

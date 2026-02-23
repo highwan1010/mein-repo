@@ -44,6 +44,7 @@ const {
     updateTaskStatusForUser,
     createChatMessage,
     getChatMessagesByConversation,
+    getChatConversationsByUser,
     getChatConversationsAdmin,
     getChatById,
     updateChatMessageByAdmin,
@@ -842,6 +843,35 @@ app.get('/api/chat/messages', async (req, res) => {
         res.json({ success: true, conversationId, messages });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Chat-Nachrichten' });
+    }
+});
+
+app.get('/api/chat/conversations', async (req, res) => {
+    try {
+        let identity = getSessionChatIdentity(req);
+        if (!identity && req.authUserId) {
+            const user = await findUserById(req.authUserId);
+            if (user) {
+                identity = {
+                    vorname: user.vorname,
+                    nachname: user.nachname,
+                    email: String(user.email || '').toLowerCase()
+                };
+            }
+        }
+
+        if (!identity && !req.authUserId) {
+            return res.json({ success: true, conversations: [] });
+        }
+
+        const conversations = await getChatConversationsByUser({
+            userId: req.authUserId || null,
+            email: identity ? identity.email : null
+        });
+
+        res.json({ success: true, conversations });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Chat-Historie' });
     }
 });
 
