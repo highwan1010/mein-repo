@@ -80,6 +80,34 @@
             gap: 12px;
         }
 
+        .chat-admin-controls {
+            border-top: 1px solid var(--border);
+            padding: 10px 12px;
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 8px;
+            align-items: center;
+            background: var(--light);
+        }
+
+        .chat-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            color: var(--gray);
+            background: var(--white);
+        }
+
+        .chat-status-badge.offen { border-color: var(--border); color: var(--gray); }
+        .chat-status-badge.in_bearbeitung { border-color: var(--accent); color: var(--accent); }
+        .chat-status-badge.erledigt { border-color: var(--success); color: var(--success); }
+        .chat-status-badge.geschlossen { border-color: var(--danger); color: var(--danger); }
+
         .chat-admin-header small { color: var(--gray); }
 
         .chat-admin-messages {
@@ -152,6 +180,10 @@
         @media (max-width: 980px) {
             .chat-admin-layout {
                 grid-template-columns: 1fr;
+            }
+
+            .chat-admin-controls {
+                grid-template-columns: 1fr 1fr;
             }
         }
     </style>
@@ -439,6 +471,7 @@
         let adminChatThreads = [];
         let activeChatConversationId = '';
         let activeChatMessages = [];
+        let activeChatConversationMeta = null;
         let editingChatMessageId = null;
         let adminChatPollHandle = null;
         const ADMIN_CHAT_NAME_STORAGE_KEY = 'jc_admin_chat_display_name_v1';
@@ -507,6 +540,21 @@
                 || message?.user_email
                 || 'Besucher'
             );
+        }
+
+        function formatConversationStatus(status) {
+            const normalized = String(status || 'offen').trim().toLowerCase();
+            if (normalized === 'in_bearbeitung') {
+                return { key: 'in_bearbeitung', label: 'In Bearbeitung' };
+            }
+            if (normalized === 'erledigt') {
+                return { key: 'erledigt', label: 'Erledigt' };
+            }
+            if (normalized === 'geschlossen') {
+                return { key: 'geschlossen', label: 'Geschlossen' };
+            }
+
+            return { key: 'offen', label: 'Offen' };
         }
 
         function showJobCreateAlert(message, type = 'error') {
@@ -843,12 +891,14 @@
                 const senderLabel = conversation.letzte_nachricht_von_admin
                     ? (conversation.letzte_admin_anzeige_name || adminChatDisplayName || 'Admin')
                     : getChatDisplayName(conversation);
+                const status = formatConversationStatus(conversation.conversation_status);
                 return `
                     <button type="button" class="chat-thread-item ${active ? 'active' : ''}" onclick="openAdminConversation('${escapeHtml(conversation.conversation_id)}')">
                         <div class="chat-thread-top">
                             <strong>${escapeHtml(getChatDisplayName(conversation))}</strong>
                             <small>${escapeHtml(formatDate(conversation.letzte_nachricht_am))}</small>
                         </div>
+                        <div><span class="chat-status-badge ${status.key}">${escapeHtml(status.label)}</span></div>
                         <div class="chat-thread-meta">${escapeHtml(conversation.visitor_email || 'Keine E-Mail')}</div>
                         <div class="chat-thread-preview">${escapeHtml(senderLabel)}: ${escapeHtml(conversation.letzte_nachricht || '')}</div>
                     </button>
@@ -885,6 +935,8 @@
             );
             const conversationTitle = activeConversation ? getChatDisplayName(activeConversation) : 'Konversation auswählen';
             const submitLabel = editingChatMessageId ? 'Änderung speichern' : 'Antwort senden';
+            const statusInfo = formatConversationStatus(activeChatConversationMeta?.conversation_status || activeConversation?.conversation_status || 'offen');
+            const conversationBlocked = ['geschlossen', 'erledigt'].includes(statusInfo.key);
 
             return `
                 <div class="chat-admin-layout">
@@ -894,10 +946,24 @@
                     <section class="chat-admin-main">
                         <div class="chat-admin-header">
                             <strong>${escapeHtml(conversationTitle)}</strong>
-                            <small>${escapeHtml(activeConversation?.visitor_email || '')}</small>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span class="chat-status-badge ${statusInfo.key}">${escapeHtml(statusInfo.label)}</span>
+                                <small>${escapeHtml(activeConversation?.visitor_email || '')}</small>
+                            </div>
                         </div>
                         <div class="chat-admin-messages" id="chatMessageList">
                             ${renderChatMessages(activeChatMessages)}
+                        </div>
+                        <div class="chat-admin-controls">
+                            <select class="form-input" id="chatConversationStatus" ${activeConversation ? '' : 'disabled'}>
+                                <option value="offen" ${statusInfo.key === 'offen' ? 'selected' : ''}>Offen</option>
+                                <option value="in_bearbeitung" ${statusInfo.key === 'in_bearbeitung' ? 'selected' : ''}>In Bearbeitung</option>
+                                <option value="erledigt" ${statusInfo.key === 'erledigt' ? 'selected' : ''}>Erledigt</option>
+                                <option value="geschlossen" ${statusInfo.key === 'geschlossen' ? 'selected' : ''}>Geschlossen</option>
+                            </select>
+                            <button class="btn-secondary" type="button" id="applyChatStatusBtn" ${activeConversation ? '' : 'disabled'}>Status setzen</button>
+                            <button class="btn-secondary" type="button" id="reopenChatBtn" ${activeConversation ? '' : 'disabled'}>Wieder öffnen</button>
+                            <button class="btn-danger" type="button" id="deleteChatBtn" ${activeConversation ? '' : 'disabled'}>Löschen</button>
                         </div>
                         <div style="padding: 0 12px 12px 12px; display: grid; gap: 8px;">
                             <label for="chatAdminDisplayName" style="color: var(--gray); font-size: 12px;">Antwortname im Chat</label>
@@ -907,8 +973,8 @@
                             </div>
                         </div>
                         <form id="chatReplyForm" class="chat-admin-form">
-                            <input class="form-input" id="chatReplyInput" type="text" maxlength="1200" placeholder="Nachricht schreiben..." ${activeConversation ? '' : 'disabled'} />
-                            <button class="btn-primary" type="submit" ${activeConversation ? '' : 'disabled'}>${submitLabel}</button>
+                            <input class="form-input" id="chatReplyInput" type="text" maxlength="1200" placeholder="${conversationBlocked ? 'Konversation ist geschlossen/erledigt' : 'Nachricht schreiben...'}" ${(activeConversation && !conversationBlocked) ? '' : 'disabled'} />
+                            <button class="btn-primary" type="submit" ${(activeConversation && !conversationBlocked) ? '' : 'disabled'}>${submitLabel}</button>
                         </form>
                     </section>
                 </div>
@@ -930,11 +996,44 @@
         async function refreshActiveConversationMessages() {
             if (!activeChatConversationId) {
                 activeChatMessages = [];
+                activeChatConversationMeta = null;
                 return;
             }
 
             const result = await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/messages`);
             activeChatMessages = result.messages || [];
+            activeChatConversationMeta = result.conversation || null;
+        }
+
+        async function applyConversationStatus(status) {
+            if (!activeChatConversationId) return;
+
+            await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+
+            await refreshChatDataOnly();
+            await openAdminConversation(activeChatConversationId);
+        }
+
+        async function deleteActiveConversation() {
+            if (!activeChatConversationId) return;
+            const confirmed = confirm('Konversation wirklich löschen?');
+            if (!confirmed) return;
+
+            await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}`, {
+                method: 'DELETE'
+            });
+
+            await refreshChatDataOnly();
+            if (activeChatConversationId) {
+                await openAdminConversation(activeChatConversationId);
+            } else {
+                document.getElementById('chatsTable').innerHTML = renderChats();
+                bindChatReplyForm();
+            }
         }
 
         function startEditChatMessage(chatId) {
@@ -990,6 +1089,10 @@
 
             const saveDisplayNameButton = document.getElementById('saveChatAdminNameBtn');
             const nameInput = document.getElementById('chatAdminDisplayName');
+            const applyStatusButton = document.getElementById('applyChatStatusBtn');
+            const statusSelect = document.getElementById('chatConversationStatus');
+            const reopenButton = document.getElementById('reopenChatBtn');
+            const deleteButton = document.getElementById('deleteChatBtn');
 
             if (saveDisplayNameButton && nameInput) {
                 saveDisplayNameButton.addEventListener('click', () => {
@@ -999,6 +1102,36 @@
                     if (chatsTable) {
                         chatsTable.innerHTML = renderChats();
                         bindChatReplyForm();
+                    }
+                });
+            }
+
+            if (applyStatusButton && statusSelect) {
+                applyStatusButton.addEventListener('click', async () => {
+                    try {
+                        await applyConversationStatus(String(statusSelect.value || 'offen').trim().toLowerCase());
+                    } catch (error) {
+                        alert(error.message || 'Status konnte nicht aktualisiert werden.');
+                    }
+                });
+            }
+
+            if (reopenButton) {
+                reopenButton.addEventListener('click', async () => {
+                    try {
+                        await applyConversationStatus('offen');
+                    } catch (error) {
+                        alert(error.message || 'Konversation konnte nicht geöffnet werden.');
+                    }
+                });
+            }
+
+            if (deleteButton) {
+                deleteButton.addEventListener('click', async () => {
+                    try {
+                        await deleteActiveConversation();
+                    } catch (error) {
+                        alert(error.message || 'Konversation konnte nicht gelöscht werden.');
                     }
                 });
             }
@@ -1019,6 +1152,7 @@
             if (!adminChatThreads.length) {
                 activeChatConversationId = '';
                 activeChatMessages = [];
+                activeChatConversationMeta = null;
                 return;
             }
 

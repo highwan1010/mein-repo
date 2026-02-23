@@ -44,6 +44,8 @@ const {
     updateTaskStatusForUser,
     createChatMessage,
     getChatMessagesByConversation,
+    getChatConversationMeta,
+    updateChatConversationState,
     getChatConversationsByUser,
     getChatConversationsAdmin,
     getChatById,
@@ -840,7 +842,8 @@ app.get('/api/chat/messages', async (req, res) => {
         }
 
         const messages = await getChatMessagesByConversation(conversationId);
-        res.json({ success: true, conversationId, messages });
+        const conversation = await getChatConversationMeta(conversationId);
+        res.json({ success: true, conversationId, conversation, messages });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Chat-Nachrichten' });
     }
@@ -894,6 +897,15 @@ app.post('/api/chat/messages', async (req, res) => {
             return res.status(400).json({ error: 'Nachricht ist zu lang (max. 1200 Zeichen)' });
         }
 
+        const currentConversationMeta = await getChatConversationMeta(conversationId);
+        if (currentConversationMeta && Boolean(currentConversationMeta.conversation_deleted)) {
+            return res.status(404).json({ error: 'Konversation wurde gelöscht' });
+        }
+
+        if (currentConversationMeta && ['geschlossen', 'erledigt'].includes(String(currentConversationMeta.conversation_status || '').toLowerCase())) {
+            return res.status(400).json({ error: 'Konversation ist geschlossen. Bitte neues Gespräch starten.' });
+        }
+
         let identity = null;
         try {
             identity = sanitizeChatIdentity(req.body || {});
@@ -926,6 +938,9 @@ app.post('/api/chat/messages', async (req, res) => {
             nachricht: text,
             userId: req.authUserId || null,
             adminId: null,
+            conversationStatus: currentConversationMeta?.conversation_status || 'offen',
+            conversationDeleted: false,
+            conversationClosedAt: currentConversationMeta?.conversation_closed_at || null,
             visitorVorname: identity.vorname,
             visitorNachname: identity.nachname,
             visitorEmail: identity.email
@@ -1221,9 +1236,64 @@ app.get('/api/admin/chats/:conversationId/messages', requireAdmin, async (req, r
         }
 
         const messages = await getChatMessagesByConversation(conversationId);
-        res.json({ success: true, conversationId, messages });
+        const conversation = await getChatConversationMeta(conversationId);
+        if (!conversation || Boolean(conversation.conversation_deleted)) {
+            return res.status(404).json({ error: 'Konversation nicht gefunden' });
+        }
+
+        res.json({ success: true, conversationId, conversation, messages });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Chat-Nachrichten' });
+    }
+});
+
+app.patch('/api/admin/chats/:conversationId/status', requireAdmin, async (req, res) => {
+    try {
+        const conversationId = normalizeConversationId(req.params.conversationId);
+        const status = String((req.body && req.body.status) || '').trim().toLowerCase();
+        const allowedStatus = ['offen', 'in_bearbeitung', 'erledigt', 'geschlossen'];
+
+        if (!conversationId) {
+            return res.status(400).json({ error: 'Ungültige Konversation' });
+        }
+
+        if (!allowedStatus.includes(status)) {
+            return res.status(400).json({ error: 'Ungültiger Konversations-Status' });
+        }
+
+        const updatedConversation = await updateChatConversationState(conversationId, {
+            status,
+            deleted: false
+        });
+
+        if (!updatedConversation) {
+            return res.status(404).json({ error: 'Konversation nicht gefunden' });
+        }
+
+        res.json({ success: true, conversation: updatedConversation });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Aktualisieren des Konversations-Status' });
+    }
+});
+
+app.delete('/api/admin/chats/:conversationId', requireAdmin, async (req, res) => {
+    try {
+        const conversationId = normalizeConversationId(req.params.conversationId);
+        if (!conversationId) {
+            return res.status(400).json({ error: 'Ungültige Konversation' });
+        }
+
+        const updatedConversation = await updateChatConversationState(conversationId, {
+            deleted: true
+        });
+
+        if (!updatedConversation) {
+            return res.status(404).json({ error: 'Konversation nicht gefunden' });
+        }
+
+        res.json({ success: true, message: 'Konversation gelöscht' });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Löschen der Konversation' });
     }
 });
 
@@ -1273,6 +1343,11 @@ app.post('/api/admin/chats/:conversationId/reply', requireAdmin, async (req, res
             return res.status(400).json({ error: 'Antwort ist zu lang (max. 1200 Zeichen)' });
         }
 
+        const conversationMeta = await getChatConversationMeta(conversationId);
+        if (!conversationMeta || Boolean(conversationMeta.conversation_deleted)) {
+            return res.status(404).json({ error: 'Konversation nicht gefunden' });
+        }
+
         const conversationMessages = await getChatMessagesByConversation(conversationId);
         const latestMessage = conversationMessages[conversationMessages.length - 1];
         if (!latestMessage) {
@@ -1285,6 +1360,9 @@ app.post('/api/admin/chats/:conversationId/reply', requireAdmin, async (req, res
             userId: latestMessage.user_id || null,
             adminId: req.currentAdmin.id,
             adminDisplayName: adminAnzeigename || `${req.currentAdmin.vorname || ''} ${req.currentAdmin.nachname || ''}`.trim() || req.currentAdmin.email,
+            conversationStatus: conversationMeta.conversation_status || 'offen',
+            conversationDeleted: false,
+            conversationClosedAt: conversationMeta.conversation_closed_at || null,
             visitorVorname: latestMessage.visitor_vorname || latestMessage.user_vorname || null,
             visitorNachname: latestMessage.visitor_nachname || latestMessage.user_nachname || null,
             visitorEmail: latestMessage.visitor_email || latestMessage.user_email || null

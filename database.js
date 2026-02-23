@@ -163,6 +163,9 @@ const initPostgres = async () => {
             visitor_email TEXT,
             admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             admin_anzeige_name TEXT,
+            conversation_status TEXT NOT NULL DEFAULT 'offen',
+            conversation_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            conversation_closed_at TIMESTAMPTZ,
             nachricht TEXT NOT NULL,
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             aktualisiert_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -175,6 +178,9 @@ const initPostgres = async () => {
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_nachname TEXT;
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_email TEXT;
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS admin_anzeige_name TEXT;
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS conversation_status TEXT NOT NULL DEFAULT 'offen';
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS conversation_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS conversation_closed_at TIMESTAMPTZ;
         ALTER TABLE chats ALTER COLUMN user_id DROP NOT NULL;
 
         UPDATE chats
@@ -186,6 +192,12 @@ const initPostgres = async () => {
             visitor_email = COALESCE(c.visitor_email, u.email)
         FROM users u
         WHERE c.user_id = u.id;
+
+        UPDATE chats
+        SET conversation_status = COALESCE(NULLIF(TRIM(conversation_status), ''), 'offen');
+
+        UPDATE chats
+        SET conversation_deleted = COALESCE(conversation_deleted, FALSE);
 
         ALTER TABLE chats ALTER COLUMN conversation_id SET NOT NULL;
     `);
@@ -240,6 +252,9 @@ const ensureFileStoreShape = (data) => {
             visitor_nachname: chat?.visitor_nachname ? String(chat.visitor_nachname) : null,
             visitor_email: chat?.visitor_email ? String(chat.visitor_email) : null,
             admin_anzeige_name: chat?.admin_anzeige_name ? String(chat.admin_anzeige_name) : null,
+            conversation_status: chat?.conversation_status ? String(chat.conversation_status) : 'offen',
+            conversation_deleted: Boolean(chat?.conversation_deleted),
+            conversation_closed_at: chat?.conversation_closed_at ? String(chat.conversation_closed_at) : null,
             admin_id: hasAdminId && Number.isInteger(Number(chat.admin_id)) ? Number(chat.admin_id) : null
         };
     });
@@ -1033,20 +1048,26 @@ const createChatMessage = async ({
     userId = null,
     adminId = null,
     adminDisplayName = null,
+    conversationStatus = 'offen',
+    conversationDeleted = false,
+    conversationClosedAt = null,
     visitorVorname = null,
     visitorNachname = null,
     visitorEmail = null
 }) => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
-            `INSERT INTO chats (conversation_id, user_id, admin_id, admin_anzeige_name, visitor_vorname, visitor_nachname, visitor_email, nachricht)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `INSERT INTO chats (conversation_id, user_id, admin_id, admin_anzeige_name, conversation_status, conversation_deleted, conversation_closed_at, visitor_vorname, visitor_nachname, visitor_email, nachricht)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *`,
             [
                 String(conversationId),
                 userId ? Number(userId) : null,
                 adminId ? Number(adminId) : null,
                 adminDisplayName ? String(adminDisplayName) : null,
+                String(conversationStatus || 'offen'),
+                Boolean(conversationDeleted),
+                conversationClosedAt || null,
                 visitorVorname ? String(visitorVorname) : null,
                 visitorNachname ? String(visitorNachname) : null,
                 visitorEmail ? String(visitorEmail) : null,
@@ -1064,6 +1085,9 @@ const createChatMessage = async ({
         user_id: userId ? Number(userId) : null,
         admin_id: adminId ? Number(adminId) : null,
         admin_anzeige_name: adminDisplayName ? String(adminDisplayName) : null,
+        conversation_status: String(conversationStatus || 'offen'),
+        conversation_deleted: Boolean(conversationDeleted),
+        conversation_closed_at: conversationClosedAt || null,
         visitor_vorname: visitorVorname ? String(visitorVorname) : null,
         visitor_nachname: visitorNachname ? String(visitorNachname) : null,
         visitor_email: visitorEmail ? String(visitorEmail) : null,
@@ -1077,15 +1101,21 @@ const createChatMessage = async ({
     return entry;
 };
 
-const getChatMessagesByConversation = async (conversationId) => {
+const getChatMessagesByConversation = async (conversationId, options = {}) => {
+    const includeDeleted = Boolean(options && options.includeDeleted);
     if (USE_POSTGRES) {
+        const filters = ['c.conversation_id = $1'];
+        if (!includeDeleted) {
+            filters.push('COALESCE(c.conversation_deleted, FALSE) = FALSE');
+        }
+
         const result = await pgPool.query(
             `SELECT c.*, a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email,
                     u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email
              FROM chats c
              LEFT JOIN users a ON a.id = c.admin_id
              LEFT JOIN users u ON u.id = c.user_id
-             WHERE c.conversation_id = $1
+             WHERE ${filters.join(' AND ')}
              ORDER BY c.erstellt_am ASC`,
             [String(conversationId)]
         );
@@ -1095,7 +1125,17 @@ const getChatMessagesByConversation = async (conversationId) => {
 
     const db = readDb();
     return (db.chats || [])
-        .filter((chat) => String(chat.conversation_id) === String(conversationId))
+        .filter((chat) => {
+            if (String(chat.conversation_id) !== String(conversationId)) {
+                return false;
+            }
+
+            if (!includeDeleted && Boolean(chat.conversation_deleted)) {
+                return false;
+            }
+
+            return true;
+        })
         .map((chat) => {
             const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
             const user = db.users.find((entry) => Number(entry.id) === Number(chat.user_id)) || {};
@@ -1112,14 +1152,110 @@ const getChatMessagesByConversation = async (conversationId) => {
         .sort((left, right) => new Date(left.erstellt_am) - new Date(right.erstellt_am));
 };
 
-const getAllChatsAdmin = async () => {
+const getChatConversationMeta = async (conversationId) => {
+    const normalizedConversationId = String(conversationId || '').trim();
+    if (!normalizedConversationId) return null;
+
     if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT conversation_id, conversation_status, conversation_deleted, conversation_closed_at, MAX(erstellt_am) AS letzte_nachricht_am
+             FROM chats
+             WHERE conversation_id = $1
+             GROUP BY conversation_id, conversation_status, conversation_deleted, conversation_closed_at
+             ORDER BY MAX(erstellt_am) DESC
+             LIMIT 1`,
+            [normalizedConversationId]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    const conversationMessages = (db.chats || [])
+        .filter((chat) => String(chat.conversation_id) === normalizedConversationId)
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+
+    if (!conversationMessages.length) {
+        return null;
+    }
+
+    const latest = conversationMessages[0];
+    return {
+        conversation_id: normalizedConversationId,
+        conversation_status: latest.conversation_status || 'offen',
+        conversation_deleted: Boolean(latest.conversation_deleted),
+        conversation_closed_at: latest.conversation_closed_at || null,
+        letzte_nachricht_am: latest.erstellt_am
+    };
+};
+
+const updateChatConversationState = async (conversationId, payload = {}) => {
+    const normalizedConversationId = String(conversationId || '').trim();
+    if (!normalizedConversationId) return null;
+
+    const requestedStatus = payload.status ? String(payload.status).trim().toLowerCase() : null;
+    const requestedDeleted = payload.deleted !== undefined ? Boolean(payload.deleted) : undefined;
+
+    const currentMeta = await getChatConversationMeta(normalizedConversationId);
+    if (!currentMeta) return null;
+
+    const nextStatus = requestedStatus || currentMeta.conversation_status || 'offen';
+    const nextDeleted = requestedDeleted === undefined
+        ? Boolean(currentMeta.conversation_deleted)
+        : requestedDeleted;
+    const shouldSetClosedAt = ['geschlossen', 'erledigt'].includes(nextStatus) && !nextDeleted;
+    const nextClosedAt = shouldSetClosedAt ? nowIso() : null;
+
+    if (USE_POSTGRES) {
+        await pgPool.query(
+            `UPDATE chats
+             SET conversation_status = $1,
+                 conversation_deleted = $2,
+                 conversation_closed_at = $3,
+                 aktualisiert_am = NOW()
+             WHERE conversation_id = $4`,
+            [nextStatus, nextDeleted, nextClosedAt, normalizedConversationId]
+        );
+
+        return getChatConversationMeta(normalizedConversationId);
+    }
+
+    const db = readDb();
+    let updated = false;
+    db.chats = (db.chats || []).map((chat) => {
+        if (String(chat.conversation_id) !== normalizedConversationId) {
+            return chat;
+        }
+
+        updated = true;
+        return {
+            ...chat,
+            conversation_status: nextStatus,
+            conversation_deleted: nextDeleted,
+            conversation_closed_at: nextClosedAt,
+            aktualisiert_am: nowIso()
+        };
+    });
+
+    if (!updated) {
+        return null;
+    }
+
+    writeDb(db);
+    return getChatConversationMeta(normalizedConversationId);
+};
+
+const getAllChatsAdmin = async (options = {}) => {
+    const includeDeleted = Boolean(options && options.includeDeleted);
+    if (USE_POSTGRES) {
+        const conditions = includeDeleted ? '' : 'WHERE COALESCE(c.conversation_deleted, FALSE) = FALSE';
         const result = await pgPool.query(
                 `SELECT c.*, u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email,
                     a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
              FROM chats c
              LEFT JOIN users u ON u.id = c.user_id
              LEFT JOIN users a ON a.id = c.admin_id
+             ${conditions}
              ORDER BY c.erstellt_am DESC`
         );
 
@@ -1128,6 +1264,7 @@ const getAllChatsAdmin = async () => {
 
     const db = readDb();
     return (db.chats || [])
+        .filter((chat) => includeDeleted || !Boolean(chat.conversation_deleted))
         .map((chat) => {
             const user = db.users.find((entry) => Number(entry.id) === Number(chat.user_id)) || {};
             const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
@@ -1160,6 +1297,9 @@ const aggregateChatConversations = (messages = []) => {
                 letzte_nachricht_am: message.erstellt_am,
                 letzte_nachricht_von_admin: Boolean(message.admin_id),
                 letzte_admin_anzeige_name: message.admin_anzeige_name || null,
+                conversation_status: message.conversation_status || 'offen',
+                conversation_deleted: Boolean(message.conversation_deleted),
+                conversation_closed_at: message.conversation_closed_at || null,
                 anzahl_nachrichten: 1
             });
             continue;
@@ -1172,6 +1312,9 @@ const aggregateChatConversations = (messages = []) => {
             current.letzte_nachricht_am = message.erstellt_am;
             current.letzte_nachricht_von_admin = Boolean(message.admin_id);
             current.letzte_admin_anzeige_name = message.admin_anzeige_name || null;
+            current.conversation_status = message.conversation_status || 'offen';
+            current.conversation_deleted = Boolean(message.conversation_deleted);
+            current.conversation_closed_at = message.conversation_closed_at || null;
         }
 
         if (!current.visitor_vorname && (message.visitor_vorname || message.user_vorname)) {
@@ -1220,7 +1363,8 @@ const getChatConversationsByUser = async ({ userId = null, email = null } = {}) 
              FROM chats c
              LEFT JOIN users a ON a.id = c.admin_id
              LEFT JOIN users u ON u.id = c.user_id
-             WHERE ${whereParts.join(' OR ')}
+                         WHERE (${whereParts.join(' OR ')})
+                             AND COALESCE(c.conversation_deleted, FALSE) = FALSE
              ORDER BY c.erstellt_am DESC`,
             values
         );
@@ -1235,7 +1379,7 @@ const getChatConversationsByUser = async ({ userId = null, email = null } = {}) 
             const matchesEmail = normalizedEmail
                 ? String(chat.visitor_email || '').trim().toLowerCase() === normalizedEmail
                 : false;
-            return matchesUser || matchesEmail;
+            return (matchesUser || matchesEmail) && !Boolean(chat.conversation_deleted);
         })
         .map((chat) => {
             const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
@@ -1572,6 +1716,8 @@ module.exports = {
     updateTaskStatusForUser,
     createChatMessage,
     getChatMessagesByConversation,
+    getChatConversationMeta,
+    updateChatConversationState,
     getChatConversationsByUser,
     getAllChatsAdmin,
     getChatConversationsAdmin,

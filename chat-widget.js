@@ -63,6 +63,14 @@
         grid-template-columns: 1fr auto;
         gap: 8px;
     }
+    .jc-chat-status {
+        border-bottom: 1px solid var(--border);
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--gray);
+        background: var(--light);
+    }
+    .jc-chat-status strong { font-weight: 700; }
     .jc-chat-select {
         border: 1px solid var(--border);
         border-radius: 10px;
@@ -151,6 +159,7 @@
             <select id="jcChatConversationSelect" class="jc-chat-select"></select>
             <button class="jc-chat-send" id="jcChatNewConversation" type="button">Neu</button>
         </div>
+        <div class="jc-chat-status" id="jcChatStatus" style="display:none;"></div>
         <div class="jc-chat-list" id="jcChatList"></div>
         <div class="jc-chat-foot" id="jcChatFoot" style="display:none;">
             <input class="jc-chat-input" id="jcChatInput" type="text" maxlength="1200" placeholder="Nachricht schreiben..." />
@@ -178,6 +187,7 @@
     const toolbar = panel.querySelector('#jcChatToolbar');
     const conversationSelect = panel.querySelector('#jcChatConversationSelect');
     const newConversationButton = panel.querySelector('#jcChatNewConversation');
+    const statusBar = panel.querySelector('#jcChatStatus');
     const identityForm = panel.querySelector('#jcChatIdentityForm');
     const vornameInput = panel.querySelector('#jcChatVorname');
     const nachnameInput = panel.querySelector('#jcChatNachname');
@@ -187,6 +197,7 @@
     let profile = null;
     let isAuthenticated = false;
     let historyConversations = [];
+    let conversationMeta = null;
 
     async function api(path, options = {}) {
         const response = await fetch(`${API_BASE}${path}`, options);
@@ -232,6 +243,44 @@
         });
     }
 
+    function formatConversationStatus(status) {
+        const normalized = String(status || 'offen').trim().toLowerCase();
+        if (normalized === 'in_bearbeitung') return { key: 'in_bearbeitung', label: 'In Bearbeitung' };
+        if (normalized === 'erledigt') return { key: 'erledigt', label: 'Erledigt' };
+        if (normalized === 'geschlossen') return { key: 'geschlossen', label: 'Geschlossen' };
+        return { key: 'offen', label: 'Offen' };
+    }
+
+    function isConversationLocked() {
+        const statusKey = formatConversationStatus(conversationMeta?.conversation_status).key;
+        return Boolean(conversationMeta?.conversation_deleted) || ['geschlossen', 'erledigt'].includes(statusKey);
+    }
+
+    function renderConversationStatusBar() {
+        if (!profile || !conversationId) {
+            statusBar.style.display = 'none';
+            statusBar.innerHTML = '';
+            return;
+        }
+
+        const status = formatConversationStatus(conversationMeta?.conversation_status);
+        const deleted = Boolean(conversationMeta?.conversation_deleted);
+        const baseText = deleted
+            ? 'Gelöscht'
+            : status.label;
+        const detail = deleted
+            ? 'Diese Konversation wurde vom Support gelöscht.'
+            : `Status: ${baseText}`;
+
+        statusBar.style.display = 'block';
+        statusBar.innerHTML = `<strong>${escapeHtml(detail)}</strong>`;
+
+        const disabled = isConversationLocked();
+        input.disabled = disabled;
+        sendButton.disabled = disabled;
+        input.placeholder = disabled ? 'Konversation ist geschlossen/erledigt' : 'Nachricht schreiben...';
+    }
+
     function saveConversationId(newConversationId) {
         conversationId = String(newConversationId || '').trim();
         if (!profile) return;
@@ -247,7 +296,8 @@
             const previewRaw = String(conversation.letzte_nachricht || '').replace(/\s+/g, ' ').trim();
             const preview = previewRaw.length > 28 ? `${previewRaw.slice(0, 28)}…` : previewRaw;
             const fallbackLabel = `Gespräch ${historyConversations.length - index}`;
-            const label = preview ? `${sender}: ${preview}` : fallbackLabel;
+            const status = formatConversationStatus(conversation.conversation_status).label;
+            const label = preview ? `[${status}] ${sender}: ${preview}` : `[${status}] ${fallbackLabel}`;
             const selected = conversationValue === String(conversationId) ? 'selected' : '';
             return `<option value="${escapeHtml(conversationValue)}" ${selected}>${escapeHtml(label)} (${escapeHtml(formatShortDate(conversation.letzte_nachricht_am))})</option>`;
         });
@@ -258,15 +308,6 @@
     async function loadConversationHistory() {
         if (!profile) {
             historyConversations = [];
-            renderConversationOptions();
-            return;
-        }
-
-        if (!isAuthenticated) {
-            const localFallback = conversationId
-                ? [{ conversation_id: conversationId, letzte_nachricht: '', letzte_nachricht_am: new Date().toISOString() }]
-                : [];
-            historyConversations = localFallback;
             renderConversationOptions();
             return;
         }
@@ -299,11 +340,13 @@
         foot.style.display = 'flex';
         identityForm.style.display = 'none';
         toolbar.style.display = 'grid';
+        renderConversationStatusBar();
     }
 
     function renderIdentityForm() {
         foot.style.display = 'none';
         toolbar.style.display = 'none';
+        statusBar.style.display = 'none';
         identityForm.style.display = 'grid';
         list.innerHTML = '<div class="jc-chat-note">Willkommen im Livechat. Vor dem Start benötigen wir Ihre Kontaktdaten.</div>';
     }
@@ -354,6 +397,8 @@
 
         try {
             const result = await api(`/api/chat/messages?conversationId=${encodeURIComponent(conversationId)}`);
+            conversationMeta = result.conversation || null;
+            renderConversationStatusBar();
             renderMessages(result.messages || []);
         } catch (error) {
             list.innerHTML = `<div class="jc-chat-note">${escapeHtml(error.message || 'Chat konnte nicht geladen werden.')}</div>`;
@@ -365,6 +410,11 @@
         if (!text) return;
         if (!profile || !conversationId) {
             renderIdentityForm();
+            return;
+        }
+
+        if (isConversationLocked()) {
+            renderConversationStatusBar();
             return;
         }
 
@@ -434,6 +484,7 @@
         });
 
         saveConversationId(result.conversationId);
+        conversationMeta = null;
         await loadConversationHistory();
         await loadMessages();
     }
@@ -461,6 +512,7 @@
             });
 
             saveConversationId(result.conversationId);
+            conversationMeta = null;
             profile = {
                 vorname: candidate.vorname,
                 nachname: candidate.nachname,
