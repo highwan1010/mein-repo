@@ -122,7 +122,7 @@
                 <div id="mainTabPane">
                     <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
                     <div id="listContainer">Lade Daten...</div>
-                    <div id="bewerberCalendarSection" style="display:none; margin-top: 16px;" data-section="bewerbungstermine">
+                    <div id="bewerberCalendarSection" style="margin-top: 16px;" data-section="bewerbungstermine">
                         <h2 style="margin-bottom: 10px;">Bewerbungstermine</h2>
                         <p style="color: var(--gray); margin-bottom: 10px;">Wählen Sie Datum und Uhrzeit für Ihr Bewerbungsgespräch.</p>
                         <div id="appointmentsAlert"></div>
@@ -206,21 +206,27 @@
             }
 
             document.getElementById('welcome').textContent = `Hallo, ${currentUser.vorname}!`;
-            document.getElementById('subtitle').textContent = currentUser.user_typ === 'arbeitgeber'
+            const normalizedUserType = String(currentUser.user_typ || '').trim().toLowerCase();
+            const isArbeitgeber = normalizedUserType === 'arbeitgeber';
+            const isBewerber = normalizedUserType === 'bewerber';
+
+            document.getElementById('subtitle').textContent = isArbeitgeber
                 ? 'Verwalten Sie Ihre Stellen und Bewerbungsprozesse.'
                 : 'Entdecken Sie passende Stellen und verfolgen Sie Ihren Vermittlungsstatus.';
-            document.getElementById('userBadge').textContent = currentUser.user_typ === 'arbeitgeber' ? 'Arbeitgeber' : 'Bewerber';
+            document.getElementById('userBadge').textContent = isArbeitgeber ? 'Arbeitgeber' : 'Bewerber';
 
-            if (currentUser.user_typ === 'arbeitgeber') {
+            if (isArbeitgeber) {
                 document.getElementById('arbeitgeberActions').style.display = 'block';
                 document.getElementById('listTitle').textContent = 'Meine veröffentlichten Jobs';
                 document.getElementById('bewerberCalendarSection').style.display = 'none';
-            } else {
+            } else if (isBewerber) {
                 document.getElementById('listTitle').textContent = 'Meine Bewerbungen';
                 document.getElementById('bewerberCalendarSection').style.display = 'block';
                 const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
                 document.getElementById('appointmentName').value = fullName;
                 document.getElementById('appointmentEmail').value = currentUser.email || '';
+            } else {
+                document.getElementById('bewerberCalendarSection').style.display = 'none';
             }
         }
 
