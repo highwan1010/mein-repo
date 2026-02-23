@@ -120,13 +120,13 @@
         margin-right: auto;
         background: var(--white);
     }
-    .jc-chat-meta { font-size: 11px; opacity: .75; margin-bottom: 4px; }
+    .jc-chat-meta { font-size: 11px; opacity: .8; margin-bottom: 0; }
     .jc-chat-meta-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin-bottom: 6px;
+        margin-bottom: 2px;
     }
     .jc-chat-time { color: var(--gray); font-size: 11px; }
     .jc-chat-text { color: var(--dark); }
