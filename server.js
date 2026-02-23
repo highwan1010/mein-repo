@@ -2,6 +2,15 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const crypto = require('crypto');
+const { Pool } = require('pg');
+
+let connectPgSimpleFactory = null;
+try {
+    connectPgSimpleFactory = require('connect-pg-simple');
+} catch {
+    connectPgSimpleFactory = null;
+}
 
 const {
     initDatabase,
@@ -34,6 +43,9 @@ const {
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'job-portal-secret-2026';
+const AUTH_COOKIE_NAME = 'jc_auth';
+const AUTH_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
 if (isProduction) {
     app.set('trust proxy', 1);
@@ -54,17 +66,38 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 
 // Session
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'job-portal-secret-2026',
+const sessionConfig = {
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    cookie: {
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
         sameSite: 'lax',
         secure: isProduction
     }
-}));
+};
+
+const sessionDbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+if (sessionDbUrl) {
+    if (!connectPgSimpleFactory) {
+        throw new Error('connect-pg-simple ist erforderlich, wenn POSTGRES_URL oder DATABASE_URL gesetzt ist.');
+    }
+
+    const PgSessionStore = connectPgSimpleFactory(session);
+    const sessionPool = new Pool({
+        connectionString: sessionDbUrl,
+        ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }
+    });
+
+    sessionConfig.store = new PgSessionStore({
+        pool: sessionPool,
+        tableName: 'user_sessions',
+        createTableIfMissing: true
+    });
+}
+
+app.use(session(sessionConfig));
 
 app.use(async (req, res, next) => {
     try {
@@ -75,9 +108,113 @@ app.use(async (req, res, next) => {
     }
 });
 
+const parseCookies = (req) => {
+    const header = req.headers.cookie;
+    if (!header) return {};
+
+    return header.split(';').reduce((cookies, cookiePart) => {
+        const separatorIndex = cookiePart.indexOf('=');
+        if (separatorIndex <= 0) return cookies;
+
+        const key = cookiePart.slice(0, separatorIndex).trim();
+        const value = cookiePart.slice(separatorIndex + 1).trim();
+        cookies[key] = decodeURIComponent(value);
+        return cookies;
+    }, {});
+};
+
+const signPayload = (payload) => {
+    return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+};
+
+const createAuthToken = (userId) => {
+    const expiresAt = Date.now() + AUTH_TOKEN_TTL_SECONDS * 1000;
+    const payload = `${userId}.${expiresAt}`;
+    const signature = signPayload(payload);
+    return Buffer.from(`${payload}.${signature}`).toString('base64url');
+};
+
+const verifyAuthToken = (token) => {
+    try {
+        const decoded = Buffer.from(token, 'base64url').toString('utf8');
+        const [userIdRaw, expiresAtRaw, signature] = decoded.split('.');
+
+        if (!userIdRaw || !expiresAtRaw || !signature) return null;
+
+        const payload = `${userIdRaw}.${expiresAtRaw}`;
+        const expectedSignature = signPayload(payload);
+        if (signature !== expectedSignature) return null;
+
+        const userId = Number(userIdRaw);
+        const expiresAt = Number(expiresAtRaw);
+        if (!Number.isInteger(userId) || !Number.isFinite(expiresAt)) return null;
+        if (Date.now() > expiresAt) return null;
+
+        return userId;
+    } catch {
+        return null;
+    }
+};
+
+const setAuthCookie = (res, userId) => {
+    const token = encodeURIComponent(createAuthToken(userId));
+    const attributes = [
+        `${AUTH_COOKIE_NAME}=${token}`,
+        'Path=/',
+        `Max-Age=${AUTH_TOKEN_TTL_SECONDS}`,
+        'HttpOnly',
+        'SameSite=Lax'
+    ];
+
+    if (isProduction) {
+        attributes.push('Secure');
+    }
+
+    res.append('Set-Cookie', attributes.join('; '));
+};
+
+const clearAuthCookie = (res) => {
+    const attributes = [
+        `${AUTH_COOKIE_NAME}=`,
+        'Path=/',
+        'Max-Age=0',
+        'HttpOnly',
+        'SameSite=Lax'
+    ];
+
+    if (isProduction) {
+        attributes.push('Secure');
+    }
+
+    res.append('Set-Cookie', attributes.join('; '));
+};
+
+const getAuthenticatedUserId = (req) => {
+    if (req.session && req.session.userId) {
+        return req.session.userId;
+    }
+
+    const cookies = parseCookies(req);
+    const token = cookies[AUTH_COOKIE_NAME];
+    if (!token) return null;
+
+    return verifyAuthToken(token);
+};
+
+app.use((req, res, next) => {
+    const authenticatedUserId = getAuthenticatedUserId(req);
+    req.authUserId = authenticatedUserId;
+
+    if (authenticatedUserId && req.session && !req.session.userId) {
+        req.session.userId = authenticatedUserId;
+    }
+
+    next();
+});
+
 // Auth Middleware
 const requireAuth = (req, res, next) => {
-    if (req.session.userId) {
+    if (req.authUserId) {
         next();
     } else {
         res.status(401).json({ error: 'Nicht autorisiert' });
@@ -86,11 +223,11 @@ const requireAuth = (req, res, next) => {
 
 const requireAdmin = async (req, res, next) => {
     try {
-        if (!req.session.userId) {
+        if (!req.authUserId) {
             return res.status(401).json({ error: 'Nicht autorisiert' });
         }
 
-        const user = await findUserById(req.session.userId);
+        const user = await findUserById(req.authUserId);
         if (!user || user.user_typ !== 'admin') {
             return res.status(403).json({ error: 'Admin-Berechtigung erforderlich' });
         }
@@ -130,17 +267,28 @@ app.post('/api/register', async (req, res) => {
         const userId = await createUser(vorname, nachname, email, hashedPassword, userTyp, firma);
 
         req.session.userId = userId;
-        const newUser = await findUserById(userId);
+        req.session.save(async (saveError) => {
+            if (saveError) {
+                return res.status(500).json({ error: 'Session konnte nicht gespeichert werden' });
+            }
 
-        res.json({ 
-            success: true, 
-            message: 'Registrierung erfolgreich!',
-            user: {
-                id: newUser.id,
-                vorname: newUser.vorname,
-                nachname: newUser.nachname,
-                email: newUser.email,
-                userTyp: newUser.user_typ
+            try {
+                setAuthCookie(res, userId);
+                const newUser = await findUserById(userId);
+
+                res.json({ 
+                    success: true, 
+                    message: 'Registrierung erfolgreich!',
+                    user: {
+                        id: newUser.id,
+                        vorname: newUser.vorname,
+                        nachname: newUser.nachname,
+                        email: newUser.email,
+                        userTyp: newUser.user_typ
+                    }
+                });
+            } catch (responseError) {
+                res.status(500).json({ error: 'Serverfehler' });
             }
         });
 
@@ -170,17 +318,23 @@ app.post('/api/login', async (req, res) => {
         }
 
         req.session.userId = user.id;
-
-        res.json({ 
-            success: true, 
-            message: 'Login erfolgreich!',
-            user: {
-                id: user.id,
-                vorname: user.vorname,
-                nachname: user.nachname,
-                email: user.email,
-                userTyp: user.user_typ
+        req.session.save((saveError) => {
+            if (saveError) {
+                return res.status(500).json({ error: 'Session konnte nicht gespeichert werden' });
             }
+
+            setAuthCookie(res, user.id);
+            res.json({ 
+                success: true, 
+                message: 'Login erfolgreich!',
+                user: {
+                    id: user.id,
+                    vorname: user.vorname,
+                    nachname: user.nachname,
+                    email: user.email,
+                    userTyp: user.user_typ
+                }
+            });
         });
 
     } catch (error) {
@@ -191,6 +345,7 @@ app.post('/api/login', async (req, res) => {
 
 // Logout
 app.post('/api/logout', (req, res) => {
+    clearAuthCookie(res);
     req.session.destroy((err) => {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Logout' });
@@ -231,9 +386,10 @@ app.put('/api/user', requireAuth, async (req, res) => {
 
 // Session Check
 app.get('/api/check-session', (req, res) => {
+    const authenticatedUserId = req.authUserId || null;
     res.json({ 
-        isAuthenticated: !!req.session.userId,
-        userId: req.session.userId || null
+        isAuthenticated: !!authenticatedUserId,
+        userId: authenticatedUserId
     });
 });
 
