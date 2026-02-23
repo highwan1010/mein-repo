@@ -18,6 +18,7 @@ const {
     createBewerbung,
     getBewerbungenByBewerber,
     getBewerbungenByJob,
+    getBewerbungById,
     updateBewerbungStatus,
     addFavorit,
     removeFavorit,
@@ -172,6 +173,21 @@ app.get('/api/user', requireAuth, async (req, res) => {
     }
 });
 
+// User Profil aktualisieren
+app.put('/api/user', requireAuth, async (req, res) => {
+    try {
+        const updatedUser = await updateUserProfile(req.session.userId, req.body || {});
+        if (!updatedUser) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
+
+        const { passwort, ...userWithoutPassword } = updatedUser;
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Aktualisieren des Profils' });
+    }
+});
+
 // Session Check
 app.get('/api/check-session', (req, res) => {
     res.json({ 
@@ -216,9 +232,18 @@ app.get('/api/jobs/:id', async (req, res) => {
 app.post('/api/jobs', requireAuth, async (req, res) => {
     try {
         const user = await findUserById(req.session.userId);
+
+        if (!user) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
         
         if (user.user_typ !== 'arbeitgeber') {
             return res.status(403).json({ error: 'Nur Arbeitgeber können Jobs erstellen' });
+        }
+
+        const { titel, firma, standort, beschreibung } = req.body;
+        if (!titel || !firma || !standort || !beschreibung) {
+            return res.status(400).json({ error: 'Titel, Firma, Standort und Beschreibung sind erforderlich' });
         }
 
         const jobId = await createJob(req.session.userId, req.body);
@@ -285,6 +310,24 @@ app.post('/api/bewerbungen', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Job-ID und Anschreiben erforderlich' });
         }
 
+        const user = await findUserById(req.session.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
+
+        if (user.user_typ !== 'bewerber') {
+            return res.status(403).json({ error: 'Nur Bewerber können Bewerbungen senden' });
+        }
+
+        const job = await getJobById(jobId);
+        if (!job) {
+            return res.status(404).json({ error: 'Job nicht gefunden' });
+        }
+
+        if (job.arbeitgeber_id === req.session.userId) {
+            return res.status(400).json({ error: 'Sie können sich nicht auf Ihren eigenen Job bewerben' });
+        }
+
         const bewerbungId = await createBewerbung(jobId, req.session.userId, anschreiben);
 
         res.json({ 
@@ -327,6 +370,22 @@ app.get('/api/jobs/:id/bewerbungen', requireAuth, async (req, res) => {
 app.put('/api/bewerbungen/:id/status', requireAuth, async (req, res) => {
     try {
         const { status } = req.body;
+
+        const allowedStatus = ['eingereicht', 'in_pruefung', 'eingeladen', 'abgelehnt', 'angenommen'];
+        if (!allowedStatus.includes(status)) {
+            return res.status(400).json({ error: 'Ungültiger Status' });
+        }
+
+        const bewerbung = await getBewerbungById(req.params.id);
+        if (!bewerbung) {
+            return res.status(404).json({ error: 'Bewerbung nicht gefunden' });
+        }
+
+        const job = await getJobById(bewerbung.job_id);
+        if (!job || job.arbeitgeber_id !== req.session.userId) {
+            return res.status(403).json({ error: 'Keine Berechtigung' });
+        }
+
         await updateBewerbungStatus(req.params.id, status);
         res.json({ success: true, message: 'Status aktualisiert' });
     } catch (error) {
@@ -340,10 +399,26 @@ app.put('/api/bewerbungen/:id/status', requireAuth, async (req, res) => {
 app.post('/api/favoriten', requireAuth, async (req, res) => {
     try {
         const { jobId } = req.body;
+
+        const job = await getJobById(jobId);
+        if (!job) {
+            return res.status(404).json({ error: 'Job nicht gefunden' });
+        }
+
         await addFavorit(req.session.userId, jobId);
         res.json({ success: true, message: 'Als Favorit gespeichert' });
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Favorit-Status prüfen
+app.get('/api/favoriten/:jobId/status', requireAuth, async (req, res) => {
+    try {
+        const favorit = await isFavorit(req.session.userId, req.params.jobId);
+        res.json({ success: true, favorit });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Prüfen des Favoriten-Status' });
     }
 });
 

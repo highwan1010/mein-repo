@@ -56,13 +56,24 @@ http://localhost:3000
 - POST /api/login
 - POST /api/logout
 - GET /api/user
+- PUT /api/user
 - GET /api/jobs
 - GET /api/jobs/:id
 - POST /api/jobs (Arbeitgeber)
 - POST /api/bewerbungen (Bewerber)
+- PUT /api/bewerbungen/:id/status (Arbeitgeber)
 - GET /api/my-bewerbungen
 - POST /api/favoriten
 - GET /api/favoriten
+- GET /api/favoriten/:jobId/status
+
+Bewerbungsstatus-Werte:
+
+- eingereicht
+- in_pruefung
+- eingeladen
+- abgelehnt
+- angenommen
 
 ## Hinweis
 

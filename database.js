@@ -587,6 +587,16 @@ const getBewerbungenByJob = async (jobId) => {
         .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
 };
 
+const getBewerbungById = async (bewerbungId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query('SELECT * FROM bewerbungen WHERE id = $1 LIMIT 1', [Number(bewerbungId)]);
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    return db.bewerbungen.find((bewerbung) => bewerbung.id === Number(bewerbungId)) || null;
+};
+
 const updateBewerbungStatus = async (bewerbungId, status) => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
@@ -736,6 +746,7 @@ module.exports = {
     createBewerbung,
     getBewerbungenByBewerber,
     getBewerbungenByJob,
+    getBewerbungById,
     updateBewerbungStatus,
     addFavorit,
     removeFavorit,
