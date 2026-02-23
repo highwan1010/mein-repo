@@ -121,15 +121,8 @@
     </main>
 
     <script>
-        const APP_ORIGIN = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
-
-        if (window.location.protocol === 'file:') {
-            const page = window.location.pathname.split('/').pop() || 'dashboard.html';
-            window.location.replace(`${APP_ORIGIN}/${page}${window.location.search}${window.location.hash}`);
-        }
-
         let currentUser = null;
-        const API_BASE = window.location.protocol === 'file:' ? APP_ORIGIN : '';
+        const API_BASE = '';
 
         function escapeHtml(value) {
             return String(value ?? '')

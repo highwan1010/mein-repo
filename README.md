@@ -104,4 +104,27 @@ Zusätzliche ENV-Variablen für Online-Betrieb:
 Hinweis zum Frontend:
 
 - Die Seiten nutzen online automatisch die aktuelle Domain (`window.location.origin`) für API-Calls.
-- `localhost` wird nur noch im lokalen `file://`-Fallback verwendet.
+- Es gibt keinen lokalen `localhost`-Fallback mehr im Frontend.
+
+## Komplett online (ohne localhost)
+
+Empfohlene Kombination:
+
+- Backend Hosting: Render oder Railway (Node Web Service)
+- Datenbank: Neon Postgres oder Vercel Postgres
+
+Schritte:
+
+1. PostgreSQL-Datenbank erstellen und `DATABASE_URL` kopieren.
+2. Backend als Web Service deployen (Build: `npm install`, Start: `node server.js`).
+3. Environment Variables setzen:
+	- `DATABASE_URL` (oder `POSTGRES_URL`)
+	- `SESSION_SECRET`
+	- `NODE_ENV=production`
+4. Nach Deploy deine Domain öffnen (z. B. `https://deine-app.onrender.com`).
+
+Wichtig:
+
+- Öffne die App nur über die Online-Domain, nicht als lokale HTML-Datei.
+- Dann läuft alles komplett online inkl. Datenbank und Sessions.
+- In `production` startet die App absichtlich **nicht**, wenn keine `DATABASE_URL`/`POSTGRES_URL` gesetzt ist.

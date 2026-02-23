@@ -9,6 +9,7 @@ const DB_PATH = process.env.DB_PATH
 
 const CONNECTION_STRING = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
 const USE_POSTGRES = Boolean(CONNECTION_STRING);
+const REQUIRE_POSTGRES = process.env.NODE_ENV === 'production';
 
 const pgPool = USE_POSTGRES ? new Pool({
     connectionString: CONNECTION_STRING,
@@ -159,6 +160,10 @@ const nextId = (db, key) => {
 };
 
 const initDatabase = async () => {
+    if (REQUIRE_POSTGRES && !USE_POSTGRES) {
+        throw new Error('Production benötigt eine Online-Datenbank: Bitte DATABASE_URL oder POSTGRES_URL setzen.');
+    }
+
     if (USE_POSTGRES) {
         await initPostgres();
         return;
