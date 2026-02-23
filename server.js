@@ -46,6 +46,8 @@ const {
     createTerminByBewerber,
     getTermineByUser,
     getAllTermineAdmin,
+    updateTerminByUser,
+    deleteTerminByUser,
     createChatMessage,
     getChatMessagesByConversation,
     getChatConversationMeta,
@@ -866,6 +868,67 @@ app.post('/api/termine', requireAuth, async (req, res) => {
         res.json({ success: true, termin });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Fehler beim Buchen des Termins' });
+    }
+});
+
+app.patch('/api/termine/:id', requireAuth, async (req, res) => {
+    try {
+        const terminId = Number(req.params.id);
+        if (!Number.isFinite(terminId) || terminId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Termin-ID' });
+        }
+
+        const datum = String((req.body && req.body.datum) || '').trim();
+        const uhrzeit = String((req.body && req.body.uhrzeit) || '').trim();
+
+        if (!datum || !uhrzeit) {
+            return res.status(400).json({ error: 'Datum und Uhrzeit sind erforderlich' });
+        }
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+            return res.status(400).json({ error: 'Ungültiges Datum' });
+        }
+
+        if (!/^\d{2}:\d{2}$/.test(uhrzeit)) {
+            return res.status(400).json({ error: 'Ungültige Uhrzeit' });
+        }
+
+        const terminZeit = new Date(`${datum}T${uhrzeit}:00`);
+        if (Number.isNaN(terminZeit.getTime())) {
+            return res.status(400).json({ error: 'Datum/Uhrzeit konnte nicht verarbeitet werden' });
+        }
+
+        const termin = await updateTerminByUser(terminId, req.authUserId, {
+            datum,
+            uhrzeit,
+            terminZeit: terminZeit.toISOString()
+        });
+
+        if (!termin) {
+            return res.status(404).json({ error: 'Termin nicht gefunden' });
+        }
+
+        res.json({ success: true, termin });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Verschieben des Termins' });
+    }
+});
+
+app.delete('/api/termine/:id', requireAuth, async (req, res) => {
+    try {
+        const terminId = Number(req.params.id);
+        if (!Number.isFinite(terminId) || terminId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Termin-ID' });
+        }
+
+        const deleted = await deleteTerminByUser(terminId, req.authUserId);
+        if (!deleted) {
+            return res.status(404).json({ error: 'Termin nicht gefunden' });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Abbrechen des Termins' });
     }
 });
 

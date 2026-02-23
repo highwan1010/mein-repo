@@ -121,7 +121,7 @@
                     </button>
                 </form>
 
-                <h3 style="margin-bottom: 10px;">Meine gebuchten Termine</h3>
+                <h3 style="margin-bottom: 10px;">Meine Termine</h3>
                 <div id="appointmentsPublicList">Bitte einloggen, um Termine zu sehen und zu buchen.</div>
             </div>
         </div>
@@ -327,6 +327,7 @@
                                 <th>Datum</th>
                                 <th>Uhrzeit</th>
                                 <th>Erstellt</th>
+                                <th>Aktion</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -334,9 +335,15 @@
                                 <tr>
                                     <td>${escapeHtml(termin.name || '—')}</td>
                                     <td>${escapeHtml(termin.email || '—')}</td>
-                                    <td>${escapeHtml(termin.datum || '—')}</td>
-                                    <td>${escapeHtml(termin.uhrzeit || '—')}</td>
+                                    <td><input class="form-input" id="terminDate-${Number(termin.id)}" type="date" value="${escapeHtml(termin.datum || '')}" /></td>
+                                    <td><input class="form-input" id="terminTime-${Number(termin.id)}" type="time" value="${escapeHtml(termin.uhrzeit || '')}" /></td>
                                     <td>${termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleString('de-DE') : '—'}</td>
+                                    <td>
+                                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                            <button class="btn-secondary" type="button" onclick="rescheduleAppointment(${Number(termin.id)})">Verschieben</button>
+                                            <button class="btn-danger" type="button" onclick="cancelAppointment(${Number(termin.id)})">Abbrechen</button>
+                                        </div>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -344,6 +351,50 @@
                 ` : '<p>Noch keine Termine gebucht.</p>';
             } catch (error) {
                 list.innerHTML = '<p>Termine konnten nicht geladen werden.</p>';
+            }
+        }
+
+        async function rescheduleAppointment(terminId) {
+            const dateInput = document.getElementById(`terminDate-${Number(terminId)}`);
+            const timeInput = document.getElementById(`terminTime-${Number(terminId)}`);
+
+            if (!dateInput || !timeInput) {
+                showAppointmentsPublicAlert('Termin konnte nicht geladen werden.');
+                return;
+            }
+
+            const datum = String(dateInput.value || '').trim();
+            const uhrzeit = String(timeInput.value || '').trim();
+
+            if (!datum || !uhrzeit) {
+                showAppointmentsPublicAlert('Bitte Datum und Uhrzeit auswählen.');
+                return;
+            }
+
+            try {
+                await api(`/api/termine/${Number(terminId)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datum, uhrzeit })
+                });
+
+                showAppointmentsPublicAlert('Termin erfolgreich verschoben.', 'success');
+                await loadPublicAppointments();
+            } catch (error) {
+                showAppointmentsPublicAlert(error.message || 'Termin konnte nicht verschoben werden.');
+            }
+        }
+
+        async function cancelAppointment(terminId) {
+            const confirmed = confirm('Diesen Termin wirklich abbrechen?');
+            if (!confirmed) return;
+
+            try {
+                await api(`/api/termine/${Number(terminId)}`, { method: 'DELETE' });
+                showAppointmentsPublicAlert('Termin wurde abgebrochen.', 'success');
+                await loadPublicAppointments();
+            } catch (error) {
+                showAppointmentsPublicAlert(error.message || 'Termin konnte nicht abgebrochen werden.');
             }
         }
 

@@ -1069,6 +1069,27 @@ const updateTaskStatusForUser = async (taskId, userId, status) => {
     return db.tasks[index];
 };
 
+const updateTaskStatusByAdmin = async (taskId, status) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `UPDATE tasks
+             SET status = $1
+             WHERE id = $2
+             RETURNING *`,
+            [status, Number(taskId)]
+        );
+        return mapTask(result.rows[0]) || null;
+    }
+
+    const db = readDb();
+    const index = (db.tasks || []).findIndex((task) => Number(task.id) === Number(taskId));
+    if (index === -1) return null;
+
+    db.tasks[index].status = status;
+    writeDb(db);
+    return db.tasks[index];
+};
+
 const createTerminByBewerber = async (userId, data) => {
     const normalizedName = String(data.name || '').trim();
     const normalizedEmail = String(data.email || '').trim().toLowerCase();
@@ -1163,6 +1184,69 @@ const getAllTermineAdmin = async () => {
             const rightDate = new Date(right.termin_zeit).getTime();
             return leftDate - rightDate;
         });
+};
+
+const updateTerminByUser = async (terminId, userId, data) => {
+    const normalizedDate = String(data.datum || '').trim();
+    const normalizedTime = String(data.uhrzeit || '').trim();
+    const appointmentAt = String(data.terminZeit || '').trim();
+
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `UPDATE termine
+             SET datum = $1, uhrzeit = $2, termin_zeit = $3
+             WHERE id = $4 AND user_id = $5
+             RETURNING *`,
+            [
+                normalizedDate,
+                normalizedTime,
+                appointmentAt,
+                Number(terminId),
+                Number(userId)
+            ]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    const index = (db.termine || []).findIndex(
+        (termin) => Number(termin.id) === Number(terminId) && Number(termin.user_id) === Number(userId)
+    );
+
+    if (index === -1) return null;
+
+    db.termine[index].datum = normalizedDate;
+    db.termine[index].uhrzeit = normalizedTime;
+    db.termine[index].termin_zeit = appointmentAt;
+    writeDb(db);
+    return db.termine[index];
+};
+
+const deleteTerminByUser = async (terminId, userId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `DELETE FROM termine
+             WHERE id = $1 AND user_id = $2
+             RETURNING id`,
+            [Number(terminId), Number(userId)]
+        );
+
+        return Boolean(result.rows[0]);
+    }
+
+    const db = readDb();
+    const before = (db.termine || []).length;
+    db.termine = (db.termine || []).filter(
+        (termin) => !(Number(termin.id) === Number(terminId) && Number(termin.user_id) === Number(userId))
+    );
+    const deleted = (db.termine || []).length < before;
+
+    if (deleted) {
+        writeDb(db);
+    }
+
+    return deleted;
 };
 
 const createChatMessage = async ({
@@ -1837,9 +1921,12 @@ module.exports = {
     getTasksByUser,
     getAllTasksAdmin,
     updateTaskStatusForUser,
+    updateTaskStatusByAdmin,
     createTerminByBewerber,
     getTermineByUser,
     getAllTermineAdmin,
+    updateTerminByUser,
+    deleteTerminByUser,
     createChatMessage,
     getChatMessagesByConversation,
     getChatConversationMeta,

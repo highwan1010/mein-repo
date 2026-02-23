@@ -530,6 +530,12 @@
             buttons.forEach((button) => {
                 button.className = button.dataset.tab === tabName ? 'btn-primary admin-tab-btn' : 'btn-secondary admin-tab-btn';
             });
+
+            if (tabName === 'appointments') {
+                refreshAppointmentsDataOnly().catch(() => {
+                    // ignore tab-switch refresh errors
+                });
+            }
         }
 
         async function api(path, options = {}) {
@@ -1269,6 +1275,15 @@
             }
         }
 
+        async function refreshAppointmentsDataOnly() {
+            const appointmentsRes = await api('/api/admin/termine');
+            adminAppointments = appointmentsRes.termine || [];
+            const appointmentsTable = document.getElementById('appointmentsTable');
+            if (appointmentsTable) {
+                appointmentsTable.innerHTML = renderAppointments(adminAppointments);
+            }
+        }
+
         async function loadAdminData() {
             const [overview, usersRes, jobsRes, bewerbungenRes, tasksRes, appointmentsRes, favoritenRes, chatsRes] = await Promise.all([
                 api('/api/admin/overview'),
@@ -1447,6 +1462,7 @@
 
                 adminChatPollHandle = setInterval(async () => {
                     try {
+                        await refreshAppointmentsDataOnly();
                         await refreshChatDataOnly();
                         if (activeChatConversationId) {
                             await refreshActiveConversationMessages();
