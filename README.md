@@ -94,3 +94,14 @@ Die Datenbank-Datei wird automatisch beim ersten Start erstellt.
 - Sobald `POSTGRES_URL` oder `DATABASE_URL` vorhanden ist, nutzt die App automatisch Postgres (inkl. Auto-Tabellenanlage beim Start).
 - Ohne Postgres-URL fällt die App auf Datei-Storage zurück. Auf Vercel wird dafür automatisch `os.tmpdir()` genutzt.
 - Optional kann ein eigener Dateipfad per `DB_PATH` gesetzt werden.
+
+Zusätzliche ENV-Variablen für Online-Betrieb:
+
+- `SESSION_SECRET` (starkes, zufälliges Secret)
+- `NODE_ENV=production`
+- `PORT` wird vom Hosting gesetzt (wird automatisch genutzt)
+
+Hinweis zum Frontend:
+
+- Die Seiten nutzen online automatisch die aktuelle Domain (`window.location.origin`) für API-Calls.
+- `localhost` wird nur noch im lokalen `file://`-Fallback verwendet.

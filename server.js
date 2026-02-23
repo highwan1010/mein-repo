@@ -32,7 +32,12 @@ const {
 } = require('./database');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (isProduction) {
+    app.set('trust proxy', 1);
+}
 
 // Datenbank initialisieren
 initDatabase().catch((error) => {
@@ -47,12 +52,14 @@ app.use(express.static(__dirname));
 
 // Session
 app.use(session({
-    secret: 'job-portal-secret-2026',
+    secret: process.env.SESSION_SECRET || 'job-portal-secret-2026',
     resave: false,
     saveUninitialized: false,
     cookie: { 
         maxAge: 24 * 60 * 60 * 1000,
-        httpOnly: true
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isProduction
     }
 }));
 
