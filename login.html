@@ -45,8 +45,17 @@
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
 
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
         function showAlert(message, type = 'error') {
-            document.getElementById('alert').innerHTML = `<div class="alert ${type}">${message}</div>`;
+            document.getElementById('alert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
         }
 
         fetch(`${API_BASE}/api/check-session`)

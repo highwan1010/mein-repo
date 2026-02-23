@@ -148,7 +148,7 @@
                 await loadJob();
                 await loadSession();
             } catch (err) {
-                document.getElementById('content').innerHTML = err.message;
+                document.getElementById('content').textContent = err.message;
             }
         })();
     </script>

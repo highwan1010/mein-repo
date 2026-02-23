@@ -1,6 +1,8 @@
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
@@ -53,9 +55,27 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'job-portal-secret-2026';
 const AUTH_COOKIE_NAME = 'jc_auth';
 const AUTH_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
+const hasCustomSessionSecret = Boolean(process.env.SESSION_SECRET && String(process.env.SESSION_SECRET).trim());
+if (isProduction && !hasCustomSessionSecret) {
+    throw new Error('SESSION_SECRET muss in Produktion gesetzt sein.');
+}
+
+const staticDenyList = new Set([
+    '/server.js',
+    '/database.js',
+    '/package.json',
+    '/package-lock.json',
+    '/jobportal.json',
+    '/readme.md',
+    '/vercel.json',
+    '/api/index.js'
+]);
+
 if (isProduction) {
     app.set('trust proxy', 1);
 }
+
+app.disable('x-powered-by');
 
 // Datenbank initialisieren
 let isDatabaseReady = false;
@@ -97,9 +117,26 @@ if (require.main === module) {
 }
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname));
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false
+}));
+
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+app.use((req, res, next) => {
+    const requestPath = String(req.path || '').toLowerCase();
+    if (staticDenyList.has(requestPath)) {
+        return res.status(404).send('Not Found');
+    }
+    next();
+});
+
+app.use(express.static(__dirname, {
+    index: false,
+    dotfiles: 'ignore'
+}));
 
 // Session
 const sessionConfig = {
@@ -276,6 +313,14 @@ const requireAdmin = async (req, res, next) => {
     }
 };
 
+const loginRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: isProduction ? 8 : 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Zu viele Login-Versuche. Bitte später erneut versuchen.' }
+});
+
 // ===== AUTH ROUTES =====
 
 // Registrierung
@@ -340,7 +385,7 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Login
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginRateLimiter, async (req, res) => {
     try {
         const { email, passwort } = req.body;
 

@@ -342,7 +342,7 @@
                                     <button class="btn-secondary" onclick="editUser(${user.id})">
                                         Bearbeiten
                                     </button>
-                                    <button class="btn-danger" style="margin-left:8px;" onclick="deleteUser(${user.id}, '${escapeHtml(user.email)}')">
+                                    <button class="btn-danger" style="margin-left:8px;" onclick="deleteUser(${user.id})">
                                         Löschen
                                     </button>
                                 </td>
@@ -388,7 +388,9 @@
             openEditModal();
         }
 
-        async function deleteUser(id, email) {
+        async function deleteUser(id) {
+            const user = adminUsers.find((item) => Number(item.id) === Number(id));
+            const email = user ? (user.email || `#${id}`) : `#${id}`;
             const confirmed = confirm(`Benutzer ${email} wirklich löschen?`);
             if (!confirmed) return;
 

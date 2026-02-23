@@ -105,8 +105,16 @@ Erforderliche ENV-Variablen für Online-Betrieb:
 Wichtig:
 
 - In `production` startet die App absichtlich **nicht**, wenn keine `DATABASE_URL`/`POSTGRES_URL` gesetzt ist.
+- In `production` startet die App absichtlich **nicht**, wenn `SESSION_SECRET` fehlt.
 - Damit ist eine externe Online-Datenbank verbindlich erzwungen.
 - Wenn `ADMIN_EMAIL` + `ADMIN_PASSWORD` gesetzt sind, wird der Admin-User beim Start automatisch erstellt/aktualisiert.
+
+Sicherheitsmaßnahmen:
+
+- Security-Header via `helmet`
+- Rate-Limit auf `POST /api/login`
+- Request-Body-Limit (`100kb`) für JSON/Form-Daten
+- Blockierte Auslieferung sensibler Serverdateien (`server.js`, `database.js`, `package*.json`, `jobportal.json`, ...)
 
 Hinweis zum Frontend:
 

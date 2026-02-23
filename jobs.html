@@ -51,6 +51,15 @@
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
 
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
         async function loadJobs() {
             const grid = document.getElementById('jobsGrid');
             grid.innerHTML = '<div class="loading">Lade Jobs...</div>';
@@ -67,19 +76,19 @@
                                     <i class="fas fa-building"></i>
                                 </div>
                                 <div class="job-title-section">
-                                    <h3>${job.titel}</h3>
-                                    <p class="company-name">${job.firma}</p>
+                                    <h3>${escapeHtml(job.titel)}</h3>
+                                    <p class="company-name">${escapeHtml(job.firma)}</p>
                                 </div>
                             </div>
                             <div class="job-details">
-                                <span><i class="fas fa-map-marker-alt"></i> ${job.standort}</span>
-                                <span><i class="fas fa-briefcase"></i> ${job.job_typ}</span>
-                                ${job.gehalt_von ? `<span><i class="fas fa-euro-sign"></i> ${job.gehalt_von}€ - ${job.gehalt_bis}€</span>` : ''}
+                                <span><i class="fas fa-map-marker-alt"></i> ${escapeHtml(job.standort)}</span>
+                                <span><i class="fas fa-briefcase"></i> ${escapeHtml(job.job_typ)}</span>
+                                ${job.gehalt_von ? `<span><i class="fas fa-euro-sign"></i> ${Number(job.gehalt_von) || 0}€ - ${Number(job.gehalt_bis) || 0}€</span>` : ''}
                             </div>
-                            <p class="job-description">${(job.beschreibung || '').substring(0, 150)}...</p>
+                            <p class="job-description">${escapeHtml((job.beschreibung || '').substring(0, 150))}...</p>
                             <div class="job-footer">
                                 <span class="job-date">${new Date(job.erstellt_am).toLocaleDateString('de-DE')}</span>
-                                <button class="btn-primary" onclick="window.location.href='job-details.html?id=${job.id}'">
+                                <button class="btn-primary" onclick="window.location.href='job-details.html?id=${Number(job.id) || 0}'">
                                     Details ansehen
                                 </button>
                             </div>
