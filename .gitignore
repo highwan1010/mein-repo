@@ -4,7 +4,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Benutzerdaten (Datenschutz!)
+# Datenbank (Datenschutz!)
+*.db
+*.db-shm
+*.db-wal
+banking.db
 users.json
 
 # Session

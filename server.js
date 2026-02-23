@@ -2,10 +2,23 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
-const fs = require('fs');
+
+// Datenbank importieren
+const {
+    initDatabase,
+    createUser,
+    findUserByEmail,
+    findUserById,
+    updateBalance,
+    addTransaction,
+    getUserTransactions
+} = require('./database');
 
 const app = express();
 const PORT = 3000;
+
+// Datenbank initialisieren
+initDatabase();
 
 // Middleware
 app.use(express.json());
@@ -22,38 +35,6 @@ app.use(session({
         httpOnly: true
     }
 }));
-
-// Benutzerdatenbank (JSON-Datei)
-const USERS_FILE = path.join(__dirname, 'users.json');
-
-// Initialisiere users.json falls nicht vorhanden
-if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2));
-}
-
-// Hilfsfunktionen für Benutzerverwaltung
-const getUsers = () => {
-    try {
-        const data = fs.readFileSync(USERS_FILE, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        return [];
-    }
-};
-
-const saveUsers = (users) => {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-};
-
-const findUserByEmail = (email) => {
-    const users = getUsers();
-    return users.find(user => user.email.toLowerCase() === email.toLowerCase());
-};
-
-const findUserById = (id) => {
-    const users = getUsers();
-    return users.find(user => user.id === id);
-};
 
 // Middleware: Prüfe ob eingeloggt
 const requireAuth = (req, res, next) => {
@@ -94,24 +75,17 @@ app.post('/api/register', async (req, res) => {
         // Hash Passwort
         const hashedPassword = await bcrypt.hash(passwort, 10);
 
-        // Erstelle neuen Benutzer
-        const users = getUsers();
-        const newUser = {
-            id: Date.now().toString(),
-            vorname,
-            nachname,
-            email: email.toLowerCase(),
-            passwort: hashedPassword,
-            kontostand: 0,
-            erstelltAm: new Date().toISOString(),
-            kontonummer: 'DE' + Math.random().toString().slice(2, 20)
-        };
+        // Generiere Kontonummer
+        const kontonummer = 'DE' + Math.random().toString().slice(2, 20);
 
-        users.push(newUser);
-        saveUsers(users);
+        // Erstelle neuen Benutzer in der Datenbank
+        const userId = createUser(vorname, nachname, email, hashedPassword, kontonummer);
 
         // Automatisch einloggen nach Registrierung
-        req.session.userId = newUser.id;
+        req.session.userId = userId;
+
+        // Hole erstellten User
+        const newUser = findUserById(userId);
 
         res.json({ 
             success: true, 
@@ -210,17 +184,51 @@ app.post('/api/update-balance', requireAuth, (req, res) => {
         return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     }
 
-    users[userIndex].kontostand = parseFloat(amount) || 0;
-    saveUsers(users);
-
-    res.json({ success: true, kontostand: users[userIndex].kontostand });
+    
+    try {
+        updateBalance(req.session.userId, parseFloat(amount) || 0);
+        res.json({ success: true, kontostand: parseFloat(amount) || 0 });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Aktualisieren des Kontostands' });
+    }
 });
 
-// Session-Check
-app.get('/api/check-session', (req, res) => {
-    res.json({ 
-        isAuthenticated: !!req.session.userId,
-        userId: req.session.userId || null
+// Transaktion hinzufügen
+app.post('/api/transaction', requireAuth, (req, res) => {
+    const { typ, betrag, beschreibung, kategorie } = req.body;
+    
+    try {
+        const transactionId = addTransaction(
+            req.session.userId,
+            typ,
+            betrag,
+            beschreibung,
+            kategorie
+        );
+        
+        // Kontostand aktualisieren
+        const user = findUserById(req.session.userId);
+        const newBalance = parseFloat(user.kontostand) + parseFloat(betrag);
+        updateBalance(req.session.userId, newBalance);
+        
+        res.json({ 
+            success: true, 
+            transactionId,
+            newBalance 
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Erstellen der Transaktion' });
+    }
+});
+
+// Transaktionen abrufen
+app.get('/api/transactions', requireAuth, (req, res) => {
+    try {
+        const transactions = getUserTransactions(req.session.userId, 20);
+        res.json({ success: true, transactions });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Abrufen der Transaktionen' });
+    }
     });
 });
 
