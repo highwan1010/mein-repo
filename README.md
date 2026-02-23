@@ -1,4 +1,4 @@
-# 🏦 FinanzPlus - Moderne Banking Website mit Login-System
+# 🏦 Bastisbanking - Moderne Banking Website mit Login-System
 
 Eine moderne, responsive Banking-Landingpage mit vollständigem Authentifizierungs-System.
 

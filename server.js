@@ -27,7 +27,7 @@ app.use(express.static(__dirname));
 
 // Session Configuration
 app.use(session({
-    secret: 'finanzplus-banking-secret-key-2026',
+    secret: 'bastisbanking-secret-key-2026',
     resave: false,
     saveUninitialized: false,
     cookie: { 
@@ -237,7 +237,7 @@ app.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════╗
 ║                                               ║
-║     🏦  FinanzPlus Banking Server            ║
+║     🏦  Bastisbanking Server                 ║
 ║                                               ║
 ║     Server läuft auf:                         ║
 ║     http://localhost:${PORT}                       ║

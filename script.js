@@ -233,4 +233,4 @@ if ('IntersectionObserver' in window) {
 }
 
 // Log page load
-console.log('FinanzPlus Banking Website loaded successfully! 🏦');
+console.log('Bastisbanking Website loaded successfully! 🏦');

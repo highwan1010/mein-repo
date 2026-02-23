@@ -1,4 +1,4 @@
-# FinanzPlus Banking - Installations- und Start-Anleitung
+# Bastisbanking - Installations- und Start-Anleitung
 
 ## 🚀 Schnellstart
 
