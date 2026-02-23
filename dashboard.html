@@ -428,6 +428,15 @@
             }
         }
 
+        function getInitialDashboardTab() {
+            const params = new URLSearchParams(window.location.search);
+            const tab = String(params.get('tab') || '').trim().toLowerCase();
+            if (tab === 'appointments' || tab === 'tasks') {
+                return tab;
+            }
+            return 'main';
+        }
+
         async function deleteJob(id) {
             if (!confirm('Job wirklich löschen?')) return;
             try {
@@ -510,6 +519,13 @@
                 await loadData();
                 await loadTasks();
                 await loadAppointments();
+
+                const initialTab = getInitialDashboardTab();
+                if (currentUser && currentUser.user_typ !== 'bewerber' && initialTab === 'appointments') {
+                    switchDashboardTab('main');
+                } else {
+                    switchDashboardTab(initialTab);
+                }
             } catch (err) {
                 alert(err.message);
             }
