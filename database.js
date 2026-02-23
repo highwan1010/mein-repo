@@ -162,6 +162,7 @@ const initPostgres = async () => {
             visitor_nachname TEXT,
             visitor_email TEXT,
             admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            admin_anzeige_name TEXT,
             nachricht TEXT NOT NULL,
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             aktualisiert_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -173,6 +174,7 @@ const initPostgres = async () => {
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_vorname TEXT;
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_nachname TEXT;
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_email TEXT;
+        ALTER TABLE chats ADD COLUMN IF NOT EXISTS admin_anzeige_name TEXT;
         ALTER TABLE chats ALTER COLUMN user_id DROP NOT NULL;
 
         UPDATE chats
@@ -237,6 +239,7 @@ const ensureFileStoreShape = (data) => {
             visitor_vorname: chat?.visitor_vorname ? String(chat.visitor_vorname) : null,
             visitor_nachname: chat?.visitor_nachname ? String(chat.visitor_nachname) : null,
             visitor_email: chat?.visitor_email ? String(chat.visitor_email) : null,
+            admin_anzeige_name: chat?.admin_anzeige_name ? String(chat.admin_anzeige_name) : null,
             admin_id: hasAdminId && Number.isInteger(Number(chat.admin_id)) ? Number(chat.admin_id) : null
         };
     });
@@ -1029,19 +1032,21 @@ const createChatMessage = async ({
     nachricht,
     userId = null,
     adminId = null,
+    adminDisplayName = null,
     visitorVorname = null,
     visitorNachname = null,
     visitorEmail = null
 }) => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
-            `INSERT INTO chats (conversation_id, user_id, admin_id, visitor_vorname, visitor_nachname, visitor_email, nachricht)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO chats (conversation_id, user_id, admin_id, admin_anzeige_name, visitor_vorname, visitor_nachname, visitor_email, nachricht)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
             [
                 String(conversationId),
                 userId ? Number(userId) : null,
                 adminId ? Number(adminId) : null,
+                adminDisplayName ? String(adminDisplayName) : null,
                 visitorVorname ? String(visitorVorname) : null,
                 visitorNachname ? String(visitorNachname) : null,
                 visitorEmail ? String(visitorEmail) : null,
@@ -1058,6 +1063,7 @@ const createChatMessage = async ({
         conversation_id: String(conversationId),
         user_id: userId ? Number(userId) : null,
         admin_id: adminId ? Number(adminId) : null,
+        admin_anzeige_name: adminDisplayName ? String(adminDisplayName) : null,
         visitor_vorname: visitorVorname ? String(visitorVorname) : null,
         visitor_nachname: visitorNachname ? String(visitorNachname) : null,
         visitor_email: visitorEmail ? String(visitorEmail) : null,
@@ -1154,6 +1160,7 @@ const getChatConversationsAdmin = async () => {
                 letzte_nachricht: message.nachricht || '',
                 letzte_nachricht_am: message.erstellt_am,
                 letzte_nachricht_von_admin: Boolean(message.admin_id),
+                letzte_admin_anzeige_name: message.admin_anzeige_name || null,
                 anzahl_nachrichten: 1
             });
             continue;
@@ -1165,6 +1172,7 @@ const getChatConversationsAdmin = async () => {
             current.letzte_nachricht = message.nachricht || '';
             current.letzte_nachricht_am = message.erstellt_am;
             current.letzte_nachricht_von_admin = Boolean(message.admin_id);
+            current.letzte_admin_anzeige_name = message.admin_anzeige_name || null;
         }
 
         if (!current.visitor_vorname && (message.visitor_vorname || message.user_vorname)) {

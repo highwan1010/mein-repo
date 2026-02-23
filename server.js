@@ -1229,6 +1229,7 @@ app.post('/api/admin/chats/:conversationId/reply', requireAdmin, async (req, res
     try {
         const conversationId = normalizeConversationId(req.params.conversationId);
         const text = String((req.body && req.body.nachricht) || '').trim();
+        const adminAnzeigename = String((req.body && req.body.adminAnzeigename) || '').trim();
 
         if (!conversationId) {
             return res.status(400).json({ error: 'Ungültige Konversation' });
@@ -1253,6 +1254,7 @@ app.post('/api/admin/chats/:conversationId/reply', requireAdmin, async (req, res
             nachricht: text,
             userId: latestMessage.user_id || null,
             adminId: req.currentAdmin.id,
+            adminDisplayName: adminAnzeigename || `${req.currentAdmin.vorname || ''} ${req.currentAdmin.nachname || ''}`.trim() || req.currentAdmin.email,
             visitorVorname: latestMessage.visitor_vorname || latestMessage.user_vorname || null,
             visitorNachname: latestMessage.visitor_nachname || latestMessage.user_nachname || null,
             visitorEmail: latestMessage.visitor_email || latestMessage.user_email || null

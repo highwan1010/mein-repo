@@ -198,10 +198,20 @@
             return;
         }
 
+        const visitorDisplayName = profile
+            ? `${profile.vorname || ''} ${profile.nachname || ''}`.trim() || profile.email || 'Besucher'
+            : 'Besucher';
+
         list.innerHTML = messages.map((message) => {
             const isAdminMessage = !!message.admin_id;
             const mine = !isAdminMessage;
-            const label = mine ? 'Ich' : 'Support';
+            const adminDisplayName = String(
+                message.admin_anzeige_name
+                || `${message.admin_vorname || ''} ${message.admin_nachname || ''}`.trim()
+                || message.admin_email
+                || 'Support'
+            );
+            const label = mine ? visitorDisplayName : adminDisplayName;
             const cls = mine ? 'mine' : 'admin';
             return `
                 <div class="jc-chat-msg ${cls}">

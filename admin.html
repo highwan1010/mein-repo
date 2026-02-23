@@ -441,6 +441,8 @@
         let activeChatMessages = [];
         let editingChatMessageId = null;
         let adminChatPollHandle = null;
+        const ADMIN_CHAT_NAME_STORAGE_KEY = 'jc_admin_chat_display_name_v1';
+        let adminChatDisplayName = localStorage.getItem(ADMIN_CHAT_NAME_STORAGE_KEY) || '';
         let editContext = null;
 
         function escapeHtml(value) {
@@ -486,6 +488,25 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Fehler');
             return data;
+        }
+
+        function getAdminMessageName(message) {
+            return String(
+                message?.admin_anzeige_name
+                || `${message?.admin_vorname || ''} ${message?.admin_nachname || ''}`.trim()
+                || message?.admin_email
+                || adminChatDisplayName
+                || 'Admin'
+            );
+        }
+
+        function getVisitorMessageName(message) {
+            return String(
+                `${message?.visitor_vorname || message?.user_vorname || ''} ${message?.visitor_nachname || message?.user_nachname || ''}`.trim()
+                || message?.visitor_email
+                || message?.user_email
+                || 'Besucher'
+            );
         }
 
         function showJobCreateAlert(message, type = 'error') {
@@ -819,7 +840,9 @@
 
             return adminChatThreads.map((conversation) => {
                 const active = String(conversation.conversation_id) === String(activeChatConversationId);
-                const senderLabel = conversation.letzte_nachricht_von_admin ? 'Admin' : 'Besucher';
+                const senderLabel = conversation.letzte_nachricht_von_admin
+                    ? (conversation.letzte_admin_anzeige_name || adminChatDisplayName || 'Admin')
+                    : getChatDisplayName(conversation);
                 return `
                     <button type="button" class="chat-thread-item ${active ? 'active' : ''}" onclick="openAdminConversation('${escapeHtml(conversation.conversation_id)}')">
                         <div class="chat-thread-top">
@@ -841,7 +864,7 @@
             return messages.map((message) => {
                 const isAdmin = Boolean(message.admin_id);
                 const isEditable = isAdmin;
-                const label = isAdmin ? 'Admin' : (message.visitor_vorname || message.user_vorname || 'Besucher');
+                const label = isAdmin ? getAdminMessageName(message) : getVisitorMessageName(message);
                 const bubbleClass = isAdmin ? 'chat-message chat-message-admin' : 'chat-message chat-message-visitor';
                 return `
                     <div class="${bubbleClass}">
@@ -875,6 +898,13 @@
                         </div>
                         <div class="chat-admin-messages" id="chatMessageList">
                             ${renderChatMessages(activeChatMessages)}
+                        </div>
+                        <div style="padding: 0 12px 12px 12px; display: grid; gap: 8px;">
+                            <label for="chatAdminDisplayName" style="color: var(--gray); font-size: 12px;">Antwortname im Chat</label>
+                            <div style="display:grid; grid-template-columns: 1fr auto; gap: 8px;">
+                                <input class="form-input" id="chatAdminDisplayName" type="text" maxlength="80" placeholder="z. B. Nina vom Support" value="${escapeHtml(adminChatDisplayName)}" />
+                                <button class="btn-secondary" type="button" id="saveChatAdminNameBtn">Speichern</button>
+                            </div>
                         </div>
                         <form id="chatReplyForm" class="chat-admin-form">
                             <input class="form-input" id="chatReplyInput" type="text" maxlength="1200" placeholder="Nachricht schreiben..." ${activeConversation ? '' : 'disabled'} />
@@ -941,7 +971,10 @@
                 await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/reply`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nachricht: text })
+                    body: JSON.stringify({
+                        nachricht: text,
+                        adminAnzeigename: adminChatDisplayName
+                    })
                 });
             }
 
@@ -954,6 +987,22 @@
         function bindChatReplyForm() {
             const form = document.getElementById('chatReplyForm');
             if (!form) return;
+
+            const saveDisplayNameButton = document.getElementById('saveChatAdminNameBtn');
+            const nameInput = document.getElementById('chatAdminDisplayName');
+
+            if (saveDisplayNameButton && nameInput) {
+                saveDisplayNameButton.addEventListener('click', () => {
+                    adminChatDisplayName = String(nameInput.value || '').trim();
+                    localStorage.setItem(ADMIN_CHAT_NAME_STORAGE_KEY, adminChatDisplayName);
+                    const chatsTable = document.getElementById('chatsTable');
+                    if (chatsTable) {
+                        chatsTable.innerHTML = renderChats();
+                        bindChatReplyForm();
+                    }
+                });
+            }
+
             form.addEventListener('submit', async (event) => {
                 try {
                     await submitChatReply(event);
@@ -1038,6 +1087,11 @@
             if (user.user_typ !== 'admin') {
                 window.location.href = 'dashboard.html';
                 return false;
+            }
+
+            if (!adminChatDisplayName) {
+                adminChatDisplayName = `${user.vorname || ''} ${user.nachname || ''}`.trim() || user.email || '';
+                localStorage.setItem(ADMIN_CHAT_NAME_STORAGE_KEY, adminChatDisplayName);
             }
 
             document.getElementById('welcome').textContent = `Admin Panel – ${user.vorname}`;
