@@ -99,11 +99,14 @@ Erforderliche ENV-Variablen für Online-Betrieb:
 - `POSTGRES_URL` (kommt automatisch von Vercel Postgres)
 - `SESSION_SECRET` (starkes, zufälliges Secret)
 - `NODE_ENV=production`
+- `ADMIN_EMAIL` (z. B. `admin@admin.admin`)
+- `ADMIN_PASSWORD` (z. B. `123456`)
 
 Wichtig:
 
 - In `production` startet die App absichtlich **nicht**, wenn keine `DATABASE_URL`/`POSTGRES_URL` gesetzt ist.
 - Damit ist eine externe Online-Datenbank verbindlich erzwungen.
+- Wenn `ADMIN_EMAIL` + `ADMIN_PASSWORD` gesetzt sind, wird der Admin-User beim Start automatisch erstellt/aktualisiert.
 
 Hinweis zum Frontend:
 

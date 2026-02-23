@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
 
 const DB_PATH = process.env.DB_PATH
     ? path.resolve(process.env.DB_PATH)
@@ -159,6 +160,70 @@ const nextId = (db, key) => {
     return db.counters[key];
 };
 
+const ensureConfiguredAdmin = async () => {
+    const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const adminPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+
+    if (!adminEmail || !adminPassword) return;
+
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+    if (USE_POSTGRES) {
+        const existing = await pgPool.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [adminEmail]);
+
+        if (existing.rowCount > 0) {
+            await pgPool.query(
+                `UPDATE users
+                 SET vorname = COALESCE(vorname, 'System'),
+                     nachname = COALESCE(nachname, 'Admin'),
+                     passwort = $1,
+                     user_typ = 'admin'
+                 WHERE id = $2`,
+                [hashedPassword, existing.rows[0].id]
+            );
+        } else {
+            await pgPool.query(
+                `INSERT INTO users (vorname, nachname, email, passwort, user_typ, firma)
+                 VALUES ('System', 'Admin', $1, $2, 'admin', NULL)`,
+                [adminEmail, hashedPassword]
+            );
+        }
+
+        console.log(`✅ Admin-Benutzer synchronisiert (${adminEmail})`);
+        return;
+    }
+
+    const db = readDb();
+    const existingUser = db.users.find((entry) => String(entry.email).toLowerCase() === adminEmail);
+
+    if (existingUser) {
+        existingUser.passwort = hashedPassword;
+        existingUser.user_typ = 'admin';
+        existingUser.vorname = existingUser.vorname || 'System';
+        existingUser.nachname = existingUser.nachname || 'Admin';
+    } else {
+        const id = nextId(db, 'users');
+        db.users.push({
+            id,
+            vorname: 'System',
+            nachname: 'Admin',
+            email: adminEmail,
+            passwort: hashedPassword,
+            user_typ: 'admin',
+            firma: null,
+            position: null,
+            telefon: null,
+            standort: null,
+            profilbild: null,
+            lebenslauf: null,
+            erstellt_am: nowIso()
+        });
+    }
+
+    writeDb(db);
+    console.log(`✅ Admin-Benutzer synchronisiert (${adminEmail})`);
+};
+
 const initDatabase = async () => {
     if (REQUIRE_POSTGRES && !USE_POSTGRES) {
         throw new Error('Production benötigt eine Online-Datenbank: Bitte DATABASE_URL oder POSTGRES_URL setzen.');
@@ -166,10 +231,12 @@ const initDatabase = async () => {
 
     if (USE_POSTGRES) {
         await initPostgres();
+        await ensureConfiguredAdmin();
         return;
     }
 
     initFileDatabase();
+    await ensureConfiguredAdmin();
 };
 
 const createUser = async (vorname, nachname, email, passwort, userTyp = 'bewerber', firma = null) => {
