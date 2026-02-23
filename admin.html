@@ -235,6 +235,7 @@
                     <button class="btn-primary admin-tab-btn" data-tab="jobs" type="button" onclick="switchAdminTab('jobs')">Jobs</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="users" type="button" onclick="switchAdminTab('users')">Benutzer</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="tasks" type="button" onclick="switchAdminTab('tasks')">Aufgaben</button>
+                    <button class="btn-secondary admin-tab-btn" data-tab="appointments" type="button" onclick="switchAdminTab('appointments')">Termine</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="chats" type="button" onclick="switchAdminTab('chats')">Livechats</button>
                 </div>
             </div>
@@ -371,6 +372,11 @@
                 <div id="tasksTable">Lade Daten...</div>
             </section>
 
+            <section class="card admin-tab-section" data-tab="appointments" style="display:none;">
+                <h2 style="margin-bottom: 10px;">Gebuchte Bewerbungstermine</h2>
+                <div id="appointmentsTable">Lade Daten...</div>
+            </section>
+
             <section class="card admin-tab-section" data-tab="jobs">
                 <h2 style="margin-bottom: 10px;">Favoriten</h2>
                 <div id="favoritenTable">Lade Daten...</div>
@@ -476,6 +482,7 @@
             : '';
         let adminUsers = [];
         let adminJobs = [];
+        let adminAppointments = [];
         let adminChatThreads = [];
         let activeChatConversationId = '';
         let activeChatMessages = [];
@@ -898,6 +905,43 @@
             `;
         }
 
+        function renderAppointments(termine) {
+            if (!termine.length) return '<p>Keine Termine vorhanden.</p>';
+            const sortedTermine = [...termine].sort((left, right) => {
+                const leftTime = new Date(left.termin_zeit || `${left.datum || ''}T${left.uhrzeit || '00:00'}:00`).getTime();
+                const rightTime = new Date(right.termin_zeit || `${right.datum || ''}T${right.uhrzeit || '00:00'}:00`).getTime();
+                return leftTime - rightTime;
+            });
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Bewerber-Konto</th>
+                            <th>Name</th>
+                            <th>E-Mail</th>
+                            <th>Datum</th>
+                            <th>Uhrzeit</th>
+                            <th>Gebucht am</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sortedTermine.map((termin) => `
+                            <tr>
+                                <td>${termin.id}</td>
+                                <td>${escapeHtml(`${termin.user_vorname || ''} ${termin.user_nachname || ''}`.trim() || termin.user_email || '—')}</td>
+                                <td>${escapeHtml(termin.name || '—')}</td>
+                                <td>${escapeHtml(termin.email || '—')}</td>
+                                <td>${escapeHtml(termin.datum || '—')}</td>
+                                <td>${escapeHtml(termin.uhrzeit || '—')}</td>
+                                <td>${formatDate(termin.erstellt_am)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
         function getChatDisplayName(conversation) {
             const fullName = `${conversation.visitor_vorname || ''} ${conversation.visitor_nachname || ''}`.trim();
             return fullName || conversation.visitor_email || 'Unbekannt';
@@ -1193,12 +1237,13 @@
         }
 
         async function loadAdminData() {
-            const [overview, usersRes, jobsRes, bewerbungenRes, tasksRes, favoritenRes, chatsRes] = await Promise.all([
+            const [overview, usersRes, jobsRes, bewerbungenRes, tasksRes, appointmentsRes, favoritenRes, chatsRes] = await Promise.all([
                 api('/api/admin/overview'),
                 api('/api/admin/users'),
                 api('/api/admin/jobs'),
                 api('/api/admin/bewerbungen'),
                 api('/api/admin/tasks'),
+                api('/api/admin/termine'),
                 api('/api/admin/favoriten'),
                 api('/api/admin/chats')
             ]);
@@ -1210,6 +1255,7 @@
 
             adminUsers = usersRes.users || [];
             adminJobs = jobsRes.jobs || [];
+            adminAppointments = appointmentsRes.termine || [];
             adminChatThreads = chatsRes.conversations || [];
 
             const hasActiveConversation = adminChatThreads.some(
@@ -1230,6 +1276,7 @@
             document.getElementById('jobsTable').innerHTML = renderJobs(jobsRes.jobs);
             document.getElementById('bewerbungenTable').innerHTML = renderBewerbungen(bewerbungenRes.bewerbungen);
             document.getElementById('tasksTable').innerHTML = renderTasks(tasksRes.tasks);
+            document.getElementById('appointmentsTable').innerHTML = renderAppointments(adminAppointments);
             document.getElementById('favoritenTable').innerHTML = renderFavoriten(favoritenRes.favoriten);
             document.getElementById('chatsTable').innerHTML = renderChats();
             bindChatReplyForm();

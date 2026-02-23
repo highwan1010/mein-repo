@@ -42,6 +42,9 @@ const {
     getTasksByUser,
     getAllTasksAdmin,
     updateTaskStatusForUser,
+    createTerminByBewerber,
+    getTermineByUser,
+    getAllTermineAdmin,
     createChatMessage,
     getChatMessagesByConversation,
     getChatConversationMeta,
@@ -812,6 +815,69 @@ app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
     }
 });
 
+// ===== TERMIN ROUTES =====
+
+app.get('/api/termine', requireAuth, async (req, res) => {
+    try {
+        const user = await findUserById(req.authUserId);
+        if (!user || user.user_typ !== 'bewerber') {
+            return res.status(403).json({ error: 'Nur Bewerber können Termine abrufen' });
+        }
+
+        const termine = await getTermineByUser(req.authUserId);
+        res.json({ success: true, termine });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Termine' });
+    }
+});
+
+app.post('/api/termine', requireAuth, async (req, res) => {
+    try {
+        const user = await findUserById(req.authUserId);
+        if (!user || user.user_typ !== 'bewerber') {
+            return res.status(403).json({ error: 'Nur Bewerber können Termine buchen' });
+        }
+
+        const name = String((req.body && req.body.name) || '').trim();
+        const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+        const datum = String((req.body && req.body.datum) || '').trim();
+        const uhrzeit = String((req.body && req.body.uhrzeit) || '').trim();
+
+        if (!name || !email || !datum || !uhrzeit) {
+            return res.status(400).json({ error: 'Name, E-Mail, Datum und Uhrzeit sind erforderlich' });
+        }
+
+        if (!EMAIL_REGEX.test(email)) {
+            return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+        }
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+            return res.status(400).json({ error: 'Ungültiges Datum' });
+        }
+
+        if (!/^\d{2}:\d{2}$/.test(uhrzeit)) {
+            return res.status(400).json({ error: 'Ungültige Uhrzeit' });
+        }
+
+        const terminZeit = new Date(`${datum}T${uhrzeit}:00`);
+        if (Number.isNaN(terminZeit.getTime())) {
+            return res.status(400).json({ error: 'Datum/Uhrzeit konnte nicht verarbeitet werden' });
+        }
+
+        const termin = await createTerminByBewerber(req.authUserId, {
+            name,
+            email,
+            datum,
+            uhrzeit,
+            terminZeit: terminZeit.toISOString()
+        });
+
+        res.json({ success: true, termin });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Buchen des Termins' });
+    }
+});
+
 // ===== LIVECHAT ROUTES =====
 
 app.post('/api/chat/session', async (req, res) => {
@@ -1180,6 +1246,15 @@ app.get('/api/admin/tasks', requireAdmin, async (req, res) => {
         res.json({ success: true, tasks });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Aufgaben' });
+    }
+});
+
+app.get('/api/admin/termine', requireAdmin, async (req, res) => {
+    try {
+        const termine = await getAllTermineAdmin();
+        res.json({ success: true, termine });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Termine' });
     }
 });
 

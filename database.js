@@ -24,14 +24,16 @@ const defaultStore = () => ({
         bewerbungen: 0,
         favoriten: 0,
         tasks: 0,
-        chats: 0
+        chats: 0,
+        termine: 0
     },
     users: [],
     jobs: [],
     bewerbungen: [],
     favoriten: [],
     tasks: [],
-    chats: []
+    chats: [],
+    termine: []
 });
 
 const nowIso = () => new Date().toISOString();
@@ -170,6 +172,17 @@ const initPostgres = async () => {
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             aktualisiert_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS termine (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            datum TEXT NOT NULL,
+            uhrzeit TEXT NOT NULL,
+            termin_zeit TIMESTAMPTZ NOT NULL,
+            erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
     `);
 
     await pgPool.query(`
@@ -225,13 +238,13 @@ const ensureFileStoreShape = (data) => {
         nextData.counters = defaultStore().counters;
     }
 
-    for (const key of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks', 'chats']) {
+    for (const key of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks', 'chats', 'termine']) {
         if (!Array.isArray(nextData[key])) {
             nextData[key] = [];
         }
     }
 
-    for (const counterKey of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks', 'chats']) {
+    for (const counterKey of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks', 'chats', 'termine']) {
         if (!Number.isFinite(nextData.counters[counterKey])) {
             nextData.counters[counterKey] = nextData[counterKey].reduce((maxId, item) => {
                 const value = Number(item && item.id);
@@ -256,6 +269,20 @@ const ensureFileStoreShape = (data) => {
             conversation_deleted: Boolean(chat?.conversation_deleted),
             conversation_closed_at: chat?.conversation_closed_at ? String(chat.conversation_closed_at) : null,
             admin_id: hasAdminId && Number.isInteger(Number(chat.admin_id)) ? Number(chat.admin_id) : null
+        };
+    });
+
+    nextData.termine = nextData.termine.map((termin) => {
+        const hasUserId = termin?.user_id !== null && termin?.user_id !== undefined && String(termin.user_id).trim() !== '';
+        return {
+            ...termin,
+            user_id: hasUserId && Number.isInteger(Number(termin.user_id)) ? Number(termin.user_id) : null,
+            name: String(termin?.name || '').trim(),
+            email: String(termin?.email || '').trim().toLowerCase(),
+            datum: String(termin?.datum || '').trim(),
+            uhrzeit: String(termin?.uhrzeit || '').trim(),
+            termin_zeit: String(termin?.termin_zeit || ''),
+            erstellt_am: termin?.erstellt_am ? String(termin.erstellt_am) : nowIso()
         };
     });
 
@@ -1042,6 +1069,102 @@ const updateTaskStatusForUser = async (taskId, userId, status) => {
     return db.tasks[index];
 };
 
+const createTerminByBewerber = async (userId, data) => {
+    const normalizedName = String(data.name || '').trim();
+    const normalizedEmail = String(data.email || '').trim().toLowerCase();
+    const normalizedDate = String(data.datum || '').trim();
+    const normalizedTime = String(data.uhrzeit || '').trim();
+    const appointmentAt = String(data.terminZeit || '').trim();
+
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `INSERT INTO termine (user_id, name, email, datum, uhrzeit, termin_zeit)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING *`,
+            [
+                Number(userId),
+                normalizedName,
+                normalizedEmail,
+                normalizedDate,
+                normalizedTime,
+                appointmentAt
+            ]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    const id = nextId(db, 'termine');
+    const termin = {
+        id,
+        user_id: Number(userId),
+        name: normalizedName,
+        email: normalizedEmail,
+        datum: normalizedDate,
+        uhrzeit: normalizedTime,
+        termin_zeit: appointmentAt,
+        erstellt_am: nowIso()
+    };
+
+    db.termine.push(termin);
+    writeDb(db);
+    return termin;
+};
+
+const getTermineByUser = async (userId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT *
+             FROM termine
+             WHERE user_id = $1
+             ORDER BY termin_zeit ASC, erstellt_am ASC`,
+            [Number(userId)]
+        );
+
+        return result.rows;
+    }
+
+    const db = readDb();
+    return (db.termine || [])
+        .filter((termin) => Number(termin.user_id) === Number(userId))
+        .sort((left, right) => {
+            const leftDate = new Date(left.termin_zeit).getTime();
+            const rightDate = new Date(right.termin_zeit).getTime();
+            return leftDate - rightDate;
+        });
+};
+
+const getAllTermineAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT t.*, u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email
+             FROM termine t
+             LEFT JOIN users u ON u.id = t.user_id
+             ORDER BY t.termin_zeit ASC, t.erstellt_am ASC`
+        );
+
+        return result.rows;
+    }
+
+    const db = readDb();
+    return (db.termine || [])
+        .map((termin) => {
+            const user = db.users.find((entry) => Number(entry.id) === Number(termin.user_id)) || {};
+            return {
+                ...termin,
+                user_vorname: user.vorname || null,
+                user_nachname: user.nachname || null,
+                user_email: user.email || null
+            };
+        })
+        .sort((left, right) => {
+            const leftDate = new Date(left.termin_zeit).getTime();
+            const rightDate = new Date(right.termin_zeit).getTime();
+            return leftDate - rightDate;
+        });
+};
+
 const createChatMessage = async ({
     conversationId,
     nachricht,
@@ -1714,6 +1837,9 @@ module.exports = {
     getTasksByUser,
     getAllTasksAdmin,
     updateTaskStatusForUser,
+    createTerminByBewerber,
+    getTermineByUser,
+    getAllTermineAdmin,
     createChatMessage,
     getChatMessagesByConversation,
     getChatConversationMeta,
