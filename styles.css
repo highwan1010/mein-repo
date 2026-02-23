@@ -51,10 +51,36 @@ body {
 .logo, .footer-logo {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 22px;
+    gap: 12px;
+    font-size: 20px;
     font-weight: 800;
     color: var(--primary);
+}
+
+.logo i, .footer-logo i {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: transparent;
+    display: grid;
+    place-items: center;
+    position: relative;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+}
+
+.logo i::before, .footer-logo i::before {
+    content: 'ID';
+    position: absolute;
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    line-height: 1;
+}
+
+.logo span, .footer-logo span {
+    letter-spacing: 0.04em;
 }
 
 .nav-menu {

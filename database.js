@@ -23,13 +23,15 @@ const defaultStore = () => ({
         jobs: 0,
         bewerbungen: 0,
         favoriten: 0,
-        tasks: 0
+        tasks: 0,
+        chats: 0
     },
     users: [],
     jobs: [],
     bewerbungen: [],
     favoriten: [],
-    tasks: []
+    tasks: [],
+    chats: []
 });
 
 const nowIso = () => new Date().toISOString();
@@ -151,6 +153,15 @@ const initPostgres = async () => {
             faellig_am TIMESTAMPTZ,
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS chats (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            nachricht TEXT NOT NULL,
+            erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            aktualisiert_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
     `);
 
     console.log('✅ Postgres-Datenbank initialisiert');
@@ -176,13 +187,13 @@ const ensureFileStoreShape = (data) => {
         nextData.counters = defaultStore().counters;
     }
 
-    for (const key of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks']) {
+    for (const key of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks', 'chats']) {
         if (!Array.isArray(nextData[key])) {
             nextData[key] = [];
         }
     }
 
-    for (const counterKey of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks']) {
+    for (const counterKey of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks', 'chats']) {
         if (!Number.isFinite(nextData.counters[counterKey])) {
             nextData.counters[counterKey] = nextData[counterKey].reduce((maxId, item) => {
                 const value = Number(item && item.id);
@@ -855,16 +866,18 @@ const deleteBewerbungByAdmin = async (bewerbungId) => {
 };
 
 const createTaskByAdmin = async (adminId, userId, data) => {
+    const taskStatus = String(data.status || 'offen').trim().toLowerCase();
     if (USE_POSTGRES) {
         const result = await pgPool.query(
             `INSERT INTO tasks (user_id, admin_id, titel, beschreibung, status, faellig_am)
-             VALUES ($1, $2, $3, $4, 'offen', $5)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
             [
                 Number(userId),
                 Number(adminId),
                 data.titel,
                 data.beschreibung || null,
+                taskStatus,
                 data.faelligAm || null
             ]
         );
@@ -880,7 +893,7 @@ const createTaskByAdmin = async (adminId, userId, data) => {
         admin_id: Number(adminId),
         titel: data.titel,
         beschreibung: data.beschreibung || null,
-        status: 'offen',
+        status: taskStatus,
         faellig_am: data.faelligAm || null,
         erstellt_am: nowIso()
     };
@@ -970,6 +983,127 @@ const updateTaskStatusForUser = async (taskId, userId, status) => {
     db.tasks[index].status = status;
     writeDb(db);
     return db.tasks[index];
+};
+
+const createChatMessage = async (userId, nachricht, adminId = null) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `INSERT INTO chats (user_id, admin_id, nachricht)
+             VALUES ($1, $2, $3)
+             RETURNING *`,
+            [Number(userId), adminId ? Number(adminId) : null, String(nachricht)]
+        );
+        return result.rows[0];
+    }
+
+    const db = readDb();
+    const id = nextId(db, 'chats');
+    const entry = {
+        id,
+        user_id: Number(userId),
+        admin_id: adminId ? Number(adminId) : null,
+        nachricht: String(nachricht),
+        erstellt_am: nowIso(),
+        aktualisiert_am: nowIso()
+    };
+
+    db.chats.push(entry);
+    writeDb(db);
+    return entry;
+};
+
+const getChatMessagesByUser = async (userId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT c.*, a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
+             FROM chats c
+             LEFT JOIN users a ON a.id = c.admin_id
+             WHERE c.user_id = $1
+             ORDER BY c.erstellt_am ASC`,
+            [Number(userId)]
+        );
+
+        return result.rows;
+    }
+
+    const db = readDb();
+    return (db.chats || [])
+        .filter((chat) => Number(chat.user_id) === Number(userId))
+        .map((chat) => {
+            const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
+            return {
+                ...chat,
+                admin_vorname: admin.vorname || null,
+                admin_nachname: admin.nachname || null,
+                admin_email: admin.email || null
+            };
+        })
+        .sort((left, right) => new Date(left.erstellt_am) - new Date(right.erstellt_am));
+};
+
+const getAllChatsAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT c.*, u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email,
+                    a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
+             FROM chats c
+             LEFT JOIN users u ON u.id = c.user_id
+             LEFT JOIN users a ON a.id = c.admin_id
+             ORDER BY c.erstellt_am DESC`
+        );
+
+        return result.rows;
+    }
+
+    const db = readDb();
+    return (db.chats || [])
+        .map((chat) => {
+            const user = db.users.find((entry) => Number(entry.id) === Number(chat.user_id)) || {};
+            const admin = db.users.find((entry) => Number(entry.id) === Number(chat.admin_id)) || {};
+            return {
+                ...chat,
+                user_vorname: user.vorname || null,
+                user_nachname: user.nachname || null,
+                user_email: user.email || null,
+                admin_vorname: admin.vorname || null,
+                admin_nachname: admin.nachname || null,
+                admin_email: admin.email || null
+            };
+        })
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const getChatById = async (chatId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query('SELECT * FROM chats WHERE id = $1 LIMIT 1', [Number(chatId)]);
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    return (db.chats || []).find((chat) => Number(chat.id) === Number(chatId)) || null;
+};
+
+const updateChatMessageByAdmin = async (chatId, nachricht) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `UPDATE chats
+             SET nachricht = $1,
+                 aktualisiert_am = NOW()
+             WHERE id = $2
+             RETURNING *`,
+            [String(nachricht), Number(chatId)]
+        );
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    const index = (db.chats || []).findIndex((chat) => Number(chat.id) === Number(chatId));
+    if (index === -1) return null;
+
+    db.chats[index].nachricht = String(nachricht);
+    db.chats[index].aktualisiert_am = nowIso();
+    writeDb(db);
+    return db.chats[index];
 };
 
 const addFavorit = async (userId, jobId) => {
@@ -1250,6 +1384,11 @@ module.exports = {
     getTasksByUser,
     getAllTasksAdmin,
     updateTaskStatusForUser,
+    createChatMessage,
+    getChatMessagesByUser,
+    getAllChatsAdmin,
+    getChatById,
+    updateChatMessageByAdmin,
     getAllJobsAdmin,
     getAllBewerbungenAdmin,
     getAllFavoritenAdmin,

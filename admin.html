@@ -38,7 +38,16 @@
                 <div class="panel"><div style="color: var(--gray);">Favoriten</div><div class="value" id="countFavoriten">0</div></div>
             </div>
 
-            <section class="card">
+            <div class="card" style="margin-top: 16px;">
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn-primary admin-tab-btn" data-tab="jobs" type="button" onclick="switchAdminTab('jobs')">Jobs</button>
+                    <button class="btn-secondary admin-tab-btn" data-tab="users" type="button" onclick="switchAdminTab('users')">Benutzer</button>
+                    <button class="btn-secondary admin-tab-btn" data-tab="tasks" type="button" onclick="switchAdminTab('tasks')">Aufgaben</button>
+                    <button class="btn-secondary admin-tab-btn" data-tab="chats" type="button" onclick="switchAdminTab('chats')">Livechats</button>
+                </div>
+            </div>
+
+            <section class="card admin-tab-section" data-tab="jobs">
                 <h2 style="margin-bottom: 10px;">Neue Vermittlungsstelle erstellen</h2>
                 <div id="jobCreateAlert"></div>
                 <form id="createJobForm">
@@ -77,7 +86,7 @@
                 </form>
             </section>
 
-            <section class="card">
+            <section class="card admin-tab-section" data-tab="users" style="display:none;">
                 <h2 style="margin-bottom: 10px;">Benutzer</h2>
                 <div id="userManageAlert"></div>
                 <form id="createUserForm" style="margin-bottom: 16px;">
@@ -121,17 +130,17 @@
                 <div id="usersTable">Lade Daten...</div>
             </section>
 
-            <section class="card">
+            <section class="card admin-tab-section" data-tab="jobs">
                 <h2 style="margin-bottom: 10px;">Jobs</h2>
                 <div id="jobsTable">Lade Daten...</div>
             </section>
 
-            <section class="card">
+            <section class="card admin-tab-section" data-tab="jobs">
                 <h2 style="margin-bottom: 10px;">Bewerbungen</h2>
                 <div id="bewerbungenTable">Lade Daten...</div>
             </section>
 
-            <section class="card">
+            <section class="card admin-tab-section" data-tab="tasks" style="display:none;">
                 <h2 style="margin-bottom: 10px;">Aufgaben zuteilen</h2>
                 <div id="taskManageAlert"></div>
                 <form id="assignTaskForm" style="margin-bottom: 16px;">
@@ -173,9 +182,14 @@
                 <div id="tasksTable">Lade Daten...</div>
             </section>
 
-            <section class="card">
+            <section class="card admin-tab-section" data-tab="jobs">
                 <h2 style="margin-bottom: 10px;">Favoriten</h2>
                 <div id="favoritenTable">Lade Daten...</div>
+            </section>
+
+            <section class="card admin-tab-section" data-tab="chats" style="display:none;">
+                <h2 style="margin-bottom: 10px;">Livechats</h2>
+                <div id="chatsTable">Lade Daten...</div>
             </section>
         </div>
     </main>
@@ -273,6 +287,7 @@
             : '';
         let adminUsers = [];
         let adminJobs = [];
+        let adminChats = [];
         let editContext = null;
 
         function escapeHtml(value) {
@@ -299,6 +314,18 @@
                 return { label: 'In Bearbeitung', className: 'warning' };
             }
             return { label: 'Offen', className: '' };
+        }
+
+        function switchAdminTab(tabName) {
+            const sections = document.querySelectorAll('.admin-tab-section');
+            sections.forEach((section) => {
+                section.style.display = section.dataset.tab === tabName ? '' : 'none';
+            });
+
+            const buttons = document.querySelectorAll('.admin-tab-btn');
+            buttons.forEach((button) => {
+                button.className = button.dataset.tab === tabName ? 'btn-primary admin-tab-btn' : 'btn-secondary admin-tab-btn';
+            });
         }
 
         async function api(path, options = {}) {
@@ -627,14 +654,91 @@
             `;
         }
 
+        function renderChats(chats) {
+            if (!chats.length) return '<p>Keine Livechats vorhanden.</p>';
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nutzer</th>
+                            <th>Sender</th>
+                            <th>Nachricht</th>
+                            <th>Erstellt</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${chats.map((chat) => {
+                            const userName = `${chat.user_vorname || ''} ${chat.user_nachname || ''}`.trim() || chat.user_email || '—';
+                            const sender = chat.admin_id ? (`Admin: ${chat.admin_vorname || ''} ${chat.admin_nachname || ''}`.trim() || chat.admin_email || 'Admin') : 'Bewerber';
+                            const messagePreview = String(chat.nachricht || '—');
+                            return `
+                            <tr>
+                                <td>${chat.id}</td>
+                                <td>${escapeHtml(userName)}</td>
+                                <td>${escapeHtml(sender)}</td>
+                                <td style="max-width: 340px; white-space: pre-wrap;">${escapeHtml(messagePreview)}</td>
+                                <td>${formatDate(chat.erstellt_am)}</td>
+                                <td>
+                                    <button class="btn-secondary" onclick="editChatMessage(${chat.id})">Bearbeiten</button>
+                                    <button class="btn-primary" style="margin-left:8px;" onclick="replyToChat(${chat.id})">Antworten</button>
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function editChatMessage(chatId) {
+            const target = adminChats.find((entry) => Number(entry.id) === Number(chatId));
+            if (!target) {
+                alert('Chat nicht gefunden.');
+                return;
+            }
+
+            const nextText = prompt('Chat-Nachricht bearbeiten:', target.nachricht || '');
+            if (nextText === null) return;
+
+            try {
+                await api(`/api/admin/chats/${chatId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nachricht: String(nextText).trim() })
+                });
+                await loadAdminData();
+            } catch (error) {
+                alert(error.message || 'Fehler beim Bearbeiten der Nachricht.');
+            }
+        }
+
+        async function replyToChat(chatId) {
+            const reply = prompt('Antwort eingeben:');
+            if (reply === null) return;
+
+            try {
+                await api(`/api/admin/chats/${chatId}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nachricht: String(reply).trim() })
+                });
+                await loadAdminData();
+            } catch (error) {
+                alert(error.message || 'Fehler beim Senden der Antwort.');
+            }
+        }
+
         async function loadAdminData() {
-            const [overview, usersRes, jobsRes, bewerbungenRes, tasksRes, favoritenRes] = await Promise.all([
+            const [overview, usersRes, jobsRes, bewerbungenRes, tasksRes, favoritenRes, chatsRes] = await Promise.all([
                 api('/api/admin/overview'),
                 api('/api/admin/users'),
                 api('/api/admin/jobs'),
                 api('/api/admin/bewerbungen'),
                 api('/api/admin/tasks'),
-                api('/api/admin/favoriten')
+                api('/api/admin/favoriten'),
+                api('/api/admin/chats')
             ]);
 
             document.getElementById('countUsers').textContent = overview.stats.totalUsers;
@@ -644,12 +748,14 @@
 
             adminUsers = usersRes.users || [];
             adminJobs = jobsRes.jobs || [];
+            adminChats = chatsRes.chats || [];
 
             document.getElementById('usersTable').innerHTML = renderUsers(usersRes.users);
             document.getElementById('jobsTable').innerHTML = renderJobs(jobsRes.jobs);
             document.getElementById('bewerbungenTable').innerHTML = renderBewerbungen(bewerbungenRes.bewerbungen);
             document.getElementById('tasksTable').innerHTML = renderTasks(tasksRes.tasks);
             document.getElementById('favoritenTable').innerHTML = renderFavoriten(favoritenRes.favoriten);
+            document.getElementById('chatsTable').innerHTML = renderChats(chatsRes.chats || []);
             populateTaskAssigneeOptions(usersRes.users);
         }
 
@@ -770,11 +876,13 @@
             try {
                 const ok = await ensureAdmin();
                 if (!ok) return;
+                switchAdminTab('jobs');
                 await loadAdminData();
             } catch (error) {
                 alert(error.message);
             }
         })();
     </script>
+    <script src="chat-widget.js"></script>
 </body>
 </html>

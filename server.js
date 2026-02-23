@@ -42,6 +42,11 @@ const {
     getTasksByUser,
     getAllTasksAdmin,
     updateTaskStatusForUser,
+    createChatMessage,
+    getChatMessagesByUser,
+    getAllChatsAdmin,
+    getChatById,
+    updateChatMessageByAdmin,
     getAllJobsAdmin,
     getAllBewerbungenAdmin,
     getAllFavoritenAdmin,
@@ -740,7 +745,7 @@ app.get('/api/tasks', requireAuth, async (req, res) => {
 app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
     try {
         const { status } = req.body || {};
-        const allowedStatus = ['offen', 'erledigt'];
+        const allowedStatus = ['offen', 'in_bearbeitung', 'erledigt'];
         if (!allowedStatus.includes(status)) {
             return res.status(400).json({ error: 'Ungültiger Aufgaben-Status' });
         }
@@ -753,6 +758,35 @@ app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
         res.json({ success: true, task: updatedTask });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Aktualisieren der Aufgabe' });
+    }
+});
+
+// ===== LIVECHAT ROUTES =====
+
+app.get('/api/chat/messages', requireAuth, async (req, res) => {
+    try {
+        const messages = await getChatMessagesByUser(req.authUserId);
+        res.json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Chat-Nachrichten' });
+    }
+});
+
+app.post('/api/chat/messages', requireAuth, async (req, res) => {
+    try {
+        const text = String((req.body && req.body.nachricht) || '').trim();
+        if (!text) {
+            return res.status(400).json({ error: 'Nachricht ist erforderlich' });
+        }
+
+        if (text.length > 1200) {
+            return res.status(400).json({ error: 'Nachricht ist zu lang (max. 1200 Zeichen)' });
+        }
+
+        const message = await createChatMessage(req.authUserId, text);
+        res.json({ success: true, message });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Senden der Nachricht' });
     }
 });
 
@@ -991,10 +1025,16 @@ app.get('/api/admin/tasks', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/tasks', requireAdmin, async (req, res) => {
     try {
-        const { userId, titel, beschreibung, faelligAm } = req.body || {};
+        const { userId, titel, beschreibung, faelligAm, status } = req.body || {};
 
         if (!userId || !titel) {
             return res.status(400).json({ error: 'Benutzer und Titel sind erforderlich' });
+        }
+
+        const normalizedStatus = String(status || 'offen').trim().toLowerCase();
+        const allowedTaskStatus = ['offen', 'in_bearbeitung', 'erledigt'];
+        if (!allowedTaskStatus.includes(normalizedStatus)) {
+            return res.status(400).json({ error: 'Ungültiger Aufgaben-Status' });
         }
 
         const targetUser = await findUserById(userId);
@@ -1009,12 +1049,79 @@ app.post('/api/admin/tasks', requireAdmin, async (req, res) => {
         const task = await createTaskByAdmin(req.currentAdmin.id, userId, {
             titel: String(titel).trim(),
             beschreibung: beschreibung ? String(beschreibung).trim() : '',
-            faelligAm: faelligAm || null
+            faelligAm: faelligAm || null,
+            status: normalizedStatus
         });
 
         res.json({ success: true, task });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Fehler beim Erstellen der Aufgabe' });
+    }
+});
+
+app.get('/api/admin/chats', requireAdmin, async (req, res) => {
+    try {
+        const chats = await getAllChatsAdmin();
+        res.json({ success: true, chats });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Livechats' });
+    }
+});
+
+app.put('/api/admin/chats/:id', requireAdmin, async (req, res) => {
+    try {
+        const chatId = Number(req.params.id);
+        const text = String((req.body && req.body.nachricht) || '').trim();
+
+        if (!Number.isInteger(chatId) || chatId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Chat-ID' });
+        }
+
+        if (!text) {
+            return res.status(400).json({ error: 'Nachricht ist erforderlich' });
+        }
+
+        if (text.length > 1200) {
+            return res.status(400).json({ error: 'Nachricht ist zu lang (max. 1200 Zeichen)' });
+        }
+
+        const updated = await updateChatMessageByAdmin(chatId, text);
+        if (!updated) {
+            return res.status(404).json({ error: 'Chat-Nachricht nicht gefunden' });
+        }
+
+        res.json({ success: true, message: updated });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Bearbeiten der Chat-Nachricht' });
+    }
+});
+
+app.post('/api/admin/chats/:id/reply', requireAdmin, async (req, res) => {
+    try {
+        const chatId = Number(req.params.id);
+        const text = String((req.body && req.body.nachricht) || '').trim();
+
+        if (!Number.isInteger(chatId) || chatId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Chat-ID' });
+        }
+
+        if (!text) {
+            return res.status(400).json({ error: 'Antwort ist erforderlich' });
+        }
+
+        if (text.length > 1200) {
+            return res.status(400).json({ error: 'Antwort ist zu lang (max. 1200 Zeichen)' });
+        }
+
+        const sourceChat = await getChatById(chatId);
+        if (!sourceChat) {
+            return res.status(404).json({ error: 'Chat-Nachricht nicht gefunden' });
+        }
+
+        const reply = await createChatMessage(sourceChat.user_id, text, req.currentAdmin.id);
+        res.json({ success: true, message: reply });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Senden der Antwort' });
     }
 });
 
