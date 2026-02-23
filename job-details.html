@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Job Details - JobConnect</title>
+    <title>Stellen-Details - JobVermittlung</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
@@ -11,9 +11,9 @@
     <nav class="navbar">
         <div class="container">
             <div class="nav-wrapper">
-                <div class="logo"><i class="fas fa-briefcase"></i><span>JobConnect</span></div>
+                <div class="logo"><i class="fas fa-briefcase"></i><span>JobVermittlung</span></div>
                 <div class="nav-buttons">
-                    <button class="btn-secondary" onclick="window.location.href='index.html'">Zur Jobliste</button>
+                    <button class="btn-secondary" onclick="window.location.href='index.html'">Zur Vermittlungsübersicht</button>
                     <button class="btn-primary" onclick="window.location.href='dashboard.html'">Dashboard</button>
                 </div>
             </div>
@@ -24,7 +24,7 @@
         <div class="container">
             <div id="content" class="card">Lade Job...</div>
             <section class="card" id="applyCard" style="display:none;">
-                <h2 style="margin-bottom: 10px;">Jetzt bewerben</h2>
+                <h2 style="margin-bottom: 10px;">Jetzt auf Stelle bewerben</h2>
                 <form id="applyForm">
                     <div class="form-group">
                         <label for="anschreiben">Anschreiben</label>
@@ -72,7 +72,7 @@
             const result = await api(`/api/jobs/${id}`);
             currentJob = result.job;
 
-            document.title = `${currentJob.titel} - JobConnect`;
+            document.title = `${currentJob.titel} - JobVermittlung`;
             document.getElementById('content').innerHTML = `
                 <h1 style="margin-bottom: 8px;">${escapeHtml(currentJob.titel)}</h1>
                 <p style="color:var(--gray); margin-bottom: 14px;">${escapeHtml(currentJob.firma)} • ${escapeHtml(currentJob.standort)}</p>

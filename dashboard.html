@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard - JobConnect</title>
+    <title>Dashboard - JobVermittlung</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
@@ -11,7 +11,7 @@
     <nav class="navbar">
         <div class="container">
             <div class="nav-wrapper">
-                <div class="logo"><i class="fas fa-briefcase"></i><span>JobConnect</span></div>
+                <div class="logo"><i class="fas fa-briefcase"></i><span>JobVermittlung</span></div>
                 <div class="nav-buttons">
                     <button class="btn-secondary" onclick="window.location.href='index.html'">Startseite</button>
                     <button class="btn-danger" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
@@ -170,8 +170,8 @@
 
             document.getElementById('welcome').textContent = `Hallo, ${currentUser.vorname}!`;
             document.getElementById('subtitle').textContent = currentUser.user_typ === 'arbeitgeber'
-                ? 'Verwalten Sie Ihre Jobs und Bewerbungen.'
-                : 'Entdecken Sie passende Jobs und verfolgen Sie Ihre Bewerbungen.';
+                ? 'Verwalten Sie Ihre Stellen und Bewerbungsprozesse.'
+                : 'Entdecken Sie passende Stellen und verfolgen Sie Ihren Vermittlungsstatus.';
             document.getElementById('userBadge').textContent = currentUser.user_typ === 'arbeitgeber' ? 'Arbeitgeber' : 'Bewerber';
 
             if (currentUser.user_typ === 'arbeitgeber') {
@@ -367,7 +367,7 @@
                 });
                 e.target.reset();
                 await loadData();
-                alert('Job erfolgreich veröffentlicht.');
+                alert('Stelle erfolgreich veröffentlicht.');
             } catch (err) {
                 alert(err.message);
             }

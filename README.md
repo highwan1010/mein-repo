@@ -1,6 +1,6 @@
-# JobConnect - Moderne Jobvermittlungsplattform
+# JobVermittlung - Moderne Jobvermittlungsplattform
 
-JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrierung und PostgreSQL-Backend für Produktion.
+JobVermittlung ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrierung und PostgreSQL-Backend für Produktion.
 
 ## Features
 

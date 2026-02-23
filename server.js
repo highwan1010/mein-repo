@@ -1023,12 +1023,12 @@ if (require.main === module) {
         console.log(`
 ╔═══════════════════════════════════════════════╗
 ║                                               ║
-║     💼  Job-Portal Server                    ║
+║     💼  JobVermittlung Server               ║
 ║                                               ║
 ║     Server läuft auf:                         ║
 ║     http://localhost:${PORT}                       ║
 ║                                               ║
-║     Professionelle Job-Vermittlung            ║
+║     Professionelle Jobvermittlung             ║
 ║                                               ║
 ╚═══════════════════════════════════════════════╝
     `);

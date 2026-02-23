@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Panel - JobConnect</title>
+    <title>Admin Panel - JobVermittlung</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
@@ -11,7 +11,7 @@
     <nav class="navbar">
         <div class="container">
             <div class="nav-wrapper">
-                <div class="logo"><i class="fas fa-shield-alt"></i><span>JobConnect Admin</span></div>
+                <div class="logo"><i class="fas fa-shield-alt"></i><span>JobVermittlung Admin</span></div>
                 <div class="nav-buttons">
                     <button class="btn-secondary" onclick="window.location.href='index.html'">Startseite</button>
                     <button class="btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
@@ -26,7 +26,7 @@
             <div class="dashboard-top">
                 <div>
                     <h1 id="welcome">Admin Panel</h1>
-                    <p id="subtitle" style="color: var(--gray);">Vollständige Systemeinsicht in Benutzer, Jobs, Bewerbungen und Favoriten.</p>
+                    <p id="subtitle" style="color: var(--gray);">Vollständige Systemeinsicht in Vermittlungsstellen, Bewerbungen, Nutzer und Aufgaben.</p>
                 </div>
                 <button class="btn-primary" id="refreshBtn"><i class="fas fa-rotate"></i> Aktualisieren</button>
             </div>
@@ -39,7 +39,7 @@
             </div>
 
             <section class="card">
-                <h2 style="margin-bottom: 10px;">Neue Arbeitsstelle erstellen</h2>
+                <h2 style="margin-bottom: 10px;">Neue Vermittlungsstelle erstellen</h2>
                 <div id="jobCreateAlert"></div>
                 <form id="createJobForm">
                     <div class="form-grid-2">
@@ -72,7 +72,7 @@
                         <textarea class="form-input" id="jobBeschreibung" rows="4" required></textarea>
                     </div>
                     <button class="btn-primary" type="submit">
-                        <i class="fas fa-plus"></i> Arbeitsstelle erstellen
+                        <i class="fas fa-plus"></i> Vermittlungsstelle erstellen
                     </button>
                 </form>
             </section>
@@ -504,7 +504,7 @@
                         })
                     });
 
-                    showJobCreateAlert('Job erfolgreich aktualisiert.', 'success');
+                    showJobCreateAlert('Vermittlungsstelle erfolgreich aktualisiert.', 'success');
                 }
 
                 await loadAdminData();
@@ -680,11 +680,11 @@
                     body: JSON.stringify(payload)
                 });
 
-                showJobCreateAlert('Arbeitsstelle erfolgreich erstellt.', 'success');
+                showJobCreateAlert('Vermittlungsstelle erfolgreich erstellt.', 'success');
                 document.getElementById('createJobForm').reset();
                 await loadAdminData();
             } catch (error) {
-                showJobCreateAlert(error.message || 'Fehler beim Erstellen der Arbeitsstelle.');
+                showJobCreateAlert(error.message || 'Fehler beim Erstellen der Vermittlungsstelle.');
             }
         });
 
