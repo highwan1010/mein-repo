@@ -117,12 +117,40 @@
                 <div style="display:flex; gap:10px; margin-bottom: 12px;">
                     <button class="btn-primary" id="tabMainBtn" type="button" onclick="switchDashboardTab('main')">Übersicht</button>
                     <button class="btn-secondary" id="tabTasksBtn" type="button" onclick="switchDashboardTab('tasks')">Aufgaben</button>
-                    <button class="btn-secondary" id="tabAppointmentsBtn" type="button" onclick="switchDashboardTab('appointments')" style="display:none;">Terminkalender</button>
                 </div>
 
                 <div id="mainTabPane">
                     <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
                     <div id="listContainer">Lade Daten...</div>
+                    <div id="bewerberCalendarSection" style="display:none; margin-top: 16px;">
+                        <h2 style="margin-bottom: 10px;">Bewerbungstermin buchen</h2>
+                        <div id="appointmentsAlert"></div>
+                        <form id="appointmentForm" style="margin-bottom: 14px;">
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label for="appointmentName">Name</label>
+                                    <input class="form-input" id="appointmentName" type="text" maxlength="140" required />
+                                </div>
+                                <div class="form-group">
+                                    <label for="appointmentEmail">E-Mail</label>
+                                    <input class="form-input" id="appointmentEmail" type="email" maxlength="140" required />
+                                </div>
+                            </div>
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label for="appointmentDate">Datum</label>
+                                    <input class="form-input" id="appointmentDate" type="date" required />
+                                </div>
+                                <div class="form-group">
+                                    <label for="appointmentTime">Uhrzeit</label>
+                                    <input class="form-input" id="appointmentTime" type="time" required />
+                                </div>
+                            </div>
+                            <button class="btn-primary" type="submit"><i class="fas fa-calendar-check"></i> Termin buchen</button>
+                        </form>
+                        <h3 style="margin-bottom: 10px;">Meine gebuchten Termine</h3>
+                        <div id="appointmentsContainer">Lade Termine...</div>
+                    </div>
                 </div>
 
                 <div id="tasksTabPane" style="display:none;">
@@ -130,35 +158,6 @@
                     <div id="tasksContainer">Lade Aufgaben...</div>
                 </div>
 
-                <div id="appointmentsTabPane" style="display:none;">
-                    <h2 style="margin-bottom: 10px;">Bewerbungstermin buchen</h2>
-                    <div id="appointmentsAlert"></div>
-                    <form id="appointmentForm" style="margin-bottom: 14px;">
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label for="appointmentName">Name</label>
-                                <input class="form-input" id="appointmentName" type="text" maxlength="140" required />
-                            </div>
-                            <div class="form-group">
-                                <label for="appointmentEmail">E-Mail</label>
-                                <input class="form-input" id="appointmentEmail" type="email" maxlength="140" required />
-                            </div>
-                        </div>
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label for="appointmentDate">Datum</label>
-                                <input class="form-input" id="appointmentDate" type="date" required />
-                            </div>
-                            <div class="form-group">
-                                <label for="appointmentTime">Uhrzeit</label>
-                                <input class="form-input" id="appointmentTime" type="time" required />
-                            </div>
-                        </div>
-                        <button class="btn-primary" type="submit"><i class="fas fa-calendar-check"></i> Termin buchen</button>
-                    </form>
-                    <h3 style="margin-bottom: 10px;">Meine gebuchten Termine</h3>
-                    <div id="appointmentsContainer">Lade Termine...</div>
-                </div>
             </section>
         </div>
     </main>
@@ -214,10 +213,10 @@
             if (currentUser.user_typ === 'arbeitgeber') {
                 document.getElementById('arbeitgeberActions').style.display = 'block';
                 document.getElementById('listTitle').textContent = 'Meine veröffentlichten Jobs';
-                document.getElementById('tabAppointmentsBtn').style.display = 'none';
+                document.getElementById('bewerberCalendarSection').style.display = 'none';
             } else {
                 document.getElementById('listTitle').textContent = 'Meine Bewerbungen';
-                document.getElementById('tabAppointmentsBtn').style.display = 'inline-flex';
+                document.getElementById('bewerberCalendarSection').style.display = 'block';
                 const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
                 document.getElementById('appointmentName').value = fullName;
                 document.getElementById('appointmentEmail').value = currentUser.email || '';
@@ -399,39 +398,26 @@
         function switchDashboardTab(tab) {
             const mainPane = document.getElementById('mainTabPane');
             const taskPane = document.getElementById('tasksTabPane');
-            const appointmentsPane = document.getElementById('appointmentsTabPane');
             const mainBtn = document.getElementById('tabMainBtn');
             const tasksBtn = document.getElementById('tabTasksBtn');
-            const appointmentsBtn = document.getElementById('tabAppointmentsBtn');
 
             if (tab === 'tasks') {
                 mainPane.style.display = 'none';
                 taskPane.style.display = 'block';
-                appointmentsPane.style.display = 'none';
                 mainBtn.className = 'btn-secondary';
                 tasksBtn.className = 'btn-primary';
-                appointmentsBtn.className = 'btn-secondary';
-            } else if (tab === 'appointments') {
-                mainPane.style.display = 'none';
-                taskPane.style.display = 'none';
-                appointmentsPane.style.display = 'block';
-                mainBtn.className = 'btn-secondary';
-                tasksBtn.className = 'btn-secondary';
-                appointmentsBtn.className = 'btn-primary';
             } else {
                 mainPane.style.display = 'block';
                 taskPane.style.display = 'none';
-                appointmentsPane.style.display = 'none';
                 mainBtn.className = 'btn-primary';
                 tasksBtn.className = 'btn-secondary';
-                appointmentsBtn.className = 'btn-secondary';
             }
         }
 
         function getInitialDashboardTab() {
             const params = new URLSearchParams(window.location.search);
             const tab = String(params.get('tab') || '').trim().toLowerCase();
-            if (tab === 'appointments' || tab === 'tasks') {
+            if (tab === 'tasks') {
                 return tab;
             }
             return 'main';
@@ -520,12 +506,10 @@
                 await loadTasks();
                 await loadAppointments();
 
-                const initialTab = getInitialDashboardTab();
-                if (currentUser && currentUser.user_typ !== 'bewerber' && initialTab === 'appointments') {
-                    switchDashboardTab('main');
-                } else {
-                    switchDashboardTab(initialTab);
-                }
+                const params = new URLSearchParams(window.location.search);
+                const requestedTab = String(params.get('tab') || '').trim().toLowerCase();
+                const initialTab = requestedTab === 'appointments' ? 'main' : getInitialDashboardTab();
+                switchDashboardTab(initialTab);
             } catch (err) {
                 alert(err.message);
             }
