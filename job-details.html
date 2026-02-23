@@ -40,6 +40,7 @@
     <script>
         let currentJob = null;
         let isAuthenticated = false;
+        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -51,7 +52,7 @@
         }
 
         async function api(path, options = {}) {
-            const response = await fetch(path, options);
+            const response = await fetch(`${API_BASE}${path}`, options);
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Fehler');
             return data;

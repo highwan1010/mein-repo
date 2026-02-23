@@ -40,11 +40,13 @@
     </div>
 
     <script>
+        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
         function showAlert(message, type = 'error') {
             document.getElementById('alert').innerHTML = `<div class="alert ${type}">${message}</div>`;
         }
 
-        fetch('/api/check-session')
+        fetch(`${API_BASE}/api/check-session`)
             .then(r => r.json())
             .then(data => {
                 if (data.isAuthenticated) {
@@ -54,22 +56,25 @@
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            try {
+                const response = await fetch(`${API_BASE}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('email').value.trim(),
+                        passwort: document.getElementById('passwort').value
+                    })
+                });
 
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: document.getElementById('email').value,
-                    passwort: document.getElementById('passwort').value
-                })
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                showAlert('Login erfolgreich. Weiterleitung...', 'success');
-                setTimeout(() => window.location.href = 'dashboard.html', 600);
-            } else {
-                showAlert(data.error || 'Login fehlgeschlagen');
+                const data = await response.json();
+                if (response.ok) {
+                    showAlert('Login erfolgreich. Weiterleitung...', 'success');
+                    setTimeout(() => window.location.href = 'dashboard.html', 600);
+                } else {
+                    showAlert(data.error || 'Login fehlgeschlagen');
+                }
+            } catch (error) {
+                showAlert('Server nicht erreichbar. Bitte starte den Server mit "node server.js".');
             }
         });
     </script>
