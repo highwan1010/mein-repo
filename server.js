@@ -18,6 +18,7 @@ const {
     findUserByEmail,
     findUserById,
     updateUserProfile,
+    updateUserByAdmin,
     createJob,
     getAllJobs,
     getJobById,
@@ -52,13 +53,43 @@ if (isProduction) {
 }
 
 // Datenbank initialisieren
-const dbInitPromise = initDatabase().catch((error) => {
-    console.error('Datenbank-Initialisierung fehlgeschlagen:', error);
-    if (require.main === module) {
-        process.exit(1);
+let isDatabaseReady = false;
+let dbInitPromise = null;
+let lastDbInitErrorAt = 0;
+const DB_INIT_RETRY_COOLDOWN_MS = 5000;
+
+const ensureDatabaseInitialized = async () => {
+    if (isDatabaseReady) {
+        return;
     }
-    throw error;
-});
+
+    const now = Date.now();
+    if (!dbInitPromise && now - lastDbInitErrorAt < DB_INIT_RETRY_COOLDOWN_MS) {
+        throw new Error('Datenbank-Initialisierung wird erneut versucht');
+    }
+
+    if (!dbInitPromise) {
+        dbInitPromise = initDatabase()
+            .then(() => {
+                isDatabaseReady = true;
+                dbInitPromise = null;
+            })
+            .catch((error) => {
+                lastDbInitErrorAt = Date.now();
+                dbInitPromise = null;
+                throw error;
+            });
+    }
+
+    await dbInitPromise;
+};
+
+if (require.main === module) {
+    ensureDatabaseInitialized().catch((error) => {
+        console.error('Datenbank-Initialisierung fehlgeschlagen:', error);
+        process.exit(1);
+    });
+}
 
 // Middleware
 app.use(express.json());
@@ -101,9 +132,10 @@ app.use(session(sessionConfig));
 
 app.use(async (req, res, next) => {
     try {
-        await dbInitPromise;
+        await ensureDatabaseInitialized();
         next();
     } catch (error) {
+        console.error('Datenbank nicht bereit:', error.message || error);
         res.status(500).json({ error: 'Datenbank nicht initialisiert' });
     }
 });
@@ -695,6 +727,47 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
+    }
+});
+
+app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
+    try {
+        const targetUserId = Number(req.params.id);
+        const { vorname, nachname, email, userTyp, firma } = req.body || {};
+
+        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
+        }
+
+        if (!vorname || !nachname || !email) {
+            return res.status(400).json({ error: 'Vorname, Nachname und E-Mail sind erforderlich' });
+        }
+
+        const allowedTypes = ['bewerber', 'admin'];
+        if (!allowedTypes.includes(userTyp)) {
+            return res.status(400).json({ error: 'Ungültiger Benutzer-Typ' });
+        }
+
+        if (req.currentAdmin && Number(req.currentAdmin.id) === targetUserId && userTyp !== 'admin') {
+            return res.status(400).json({ error: 'Admin kann die eigene Rolle nicht entfernen' });
+        }
+
+        const updatedUser = await updateUserByAdmin(targetUserId, {
+            vorname: String(vorname).trim(),
+            nachname: String(nachname).trim(),
+            email: String(email).trim(),
+            userTyp,
+            firma: firma ? String(firma).trim() : null
+        });
+
+        if (!updatedUser) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
+
+        const { passwort, ...userWithoutPassword } = updatedUser;
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Aktualisieren des Benutzers' });
     }
 });
 

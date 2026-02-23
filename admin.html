@@ -127,6 +127,14 @@
             return data;
         }
 
+        function escapeForJsString(value) {
+            return String(value ?? '')
+                .replaceAll('\\', '\\\\')
+                .replaceAll("'", "\\'")
+                .replaceAll('\n', ' ')
+                .replaceAll('\r', ' ');
+        }
+
         function showJobCreateAlert(message, type = 'error') {
             document.getElementById('jobCreateAlert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
         }
@@ -143,6 +151,7 @@
                             <th>Typ</th>
                             <th>Firma</th>
                             <th>Erstellt</th>
+                            <th>Aktion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -154,11 +163,58 @@
                                 <td><span class="badge">${escapeHtml(user.user_typ)}</span></td>
                                 <td>${escapeHtml(user.firma || '—')}</td>
                                 <td>${formatDate(user.erstellt_am)}</td>
+                                <td>
+                                    <button class="btn-secondary" onclick="editUser(${user.id}, '${escapeForJsString(user.vorname)}', '${escapeForJsString(user.nachname)}', '${escapeForJsString(user.email)}', '${escapeForJsString(user.user_typ)}', '${escapeForJsString(user.firma || '')}')">
+                                        Bearbeiten
+                                    </button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
+        }
+
+        async function editUser(id, currentVorname, currentNachname, currentEmail, currentUserTyp, currentFirma) {
+            const vorname = prompt('Vorname:', currentVorname);
+            if (vorname === null) return;
+
+            const nachname = prompt('Nachname:', currentNachname);
+            if (nachname === null) return;
+
+            const email = prompt('E-Mail:', currentEmail);
+            if (email === null) return;
+
+            const userTypInput = prompt('Typ (bewerber/admin):', currentUserTyp);
+            if (userTypInput === null) return;
+
+            const firma = prompt('Firma (optional):', currentFirma || '');
+            if (firma === null) return;
+
+            const userTyp = String(userTypInput).trim().toLowerCase();
+            if (userTyp !== 'bewerber' && userTyp !== 'admin') {
+                alert('Ungültiger Typ. Erlaubt: bewerber oder admin');
+                return;
+            }
+
+            try {
+                await api(`/api/admin/users/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vorname: String(vorname).trim(),
+                        nachname: String(nachname).trim(),
+                        email: String(email).trim(),
+                        userTyp,
+                        firma: String(firma).trim() || null
+                    })
+                });
+
+                await loadAdminData();
+                alert('Benutzer erfolgreich aktualisiert.');
+            } catch (error) {
+                alert(error.message || 'Fehler beim Aktualisieren des Benutzers.');
+            }
         }
 
         function renderJobs(jobs) {

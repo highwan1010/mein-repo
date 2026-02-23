@@ -347,6 +347,67 @@ const updateUserProfile = async (userId, data) => {
     return db.users[index];
 };
 
+const updateUserByAdmin = async (userId, data) => {
+    const targetId = Number(userId);
+    const normalizedEmail = data.email ? String(data.email).toLowerCase().trim() : null;
+
+    if (USE_POSTGRES) {
+        const existing = await findUserById(targetId);
+        if (!existing) return null;
+
+        if (normalizedEmail && normalizedEmail !== existing.email) {
+            const emailOwner = await findUserByEmail(normalizedEmail);
+            if (emailOwner && Number(emailOwner.id) !== targetId) {
+                throw new Error('E-Mail bereits registriert');
+            }
+        }
+
+        const result = await pgPool.query(
+            `UPDATE users
+             SET vorname = $1,
+                 nachname = $2,
+                 email = $3,
+                 user_typ = $4,
+                 firma = $5
+             WHERE id = $6
+             RETURNING *`,
+            [
+                data.vorname ?? existing.vorname,
+                data.nachname ?? existing.nachname,
+                normalizedEmail ?? existing.email,
+                data.userTyp ?? existing.user_typ,
+                data.firma ?? existing.firma,
+                targetId
+            ]
+        );
+
+        return mapUser(result.rows[0]);
+    }
+
+    const db = readDb();
+    const index = db.users.findIndex((user) => user.id === targetId);
+    if (index === -1) return null;
+
+    if (normalizedEmail && normalizedEmail !== db.users[index].email) {
+        const emailOwner = db.users.find((user) => user.email === normalizedEmail && user.id !== targetId);
+        if (emailOwner) {
+            throw new Error('E-Mail bereits registriert');
+        }
+    }
+
+    db.users[index] = {
+        ...db.users[index],
+        vorname: data.vorname ?? db.users[index].vorname,
+        nachname: data.nachname ?? db.users[index].nachname,
+        email: normalizedEmail ?? db.users[index].email,
+        user_typ: data.userTyp ?? db.users[index].user_typ,
+        firma: data.firma ?? db.users[index].firma
+    };
+
+    writeDb(db);
+    return db.users[index];
+};
+
 const createJob = async (arbeitgeberId, jobData) => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(
@@ -914,6 +975,7 @@ module.exports = {
     findUserByEmail,
     findUserById,
     updateUserProfile,
+    updateUserByAdmin,
     createJob,
     getAllJobs,
     getJobById,
