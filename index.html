@@ -23,10 +23,10 @@
                     <li><a href="#kontakt">Kontakt</a></li>
                 </ul>
                 <div class="nav-buttons">
-                    <button class="btn-secondary" onclick="window.location.href='login.html'">
+                    <button class="btn-secondary" id="loginBtn" onclick="window.location.href='login.html'">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
-                    <button class="btn-primary" onclick="window.location.href='register.html'">
+                    <button class="btn-primary" id="registerBtn" onclick="window.location.href='register.html'">
                         <i class="fas fa-user-plus"></i> Registrieren
                     </button>
                 </div>
@@ -306,7 +306,35 @@
             loadJobs({ search, standort });
         }
 
+        async function updateNavForSession() {
+            try {
+                const response = await fetch(`${API_BASE}/api/check-session`);
+                const data = await response.json();
+
+                if (!data.isAuthenticated) {
+                    return;
+                }
+
+                const loginBtn = document.getElementById('loginBtn');
+                const registerBtn = document.getElementById('registerBtn');
+
+                if (loginBtn) {
+                    loginBtn.innerHTML = '<i class="fas fa-tachometer-alt"></i> Dashboard';
+                    loginBtn.onclick = () => {
+                        window.location.href = 'dashboard.html';
+                    };
+                }
+
+                if (registerBtn) {
+                    registerBtn.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Fehler beim Prüfen der Session:', error);
+            }
+        }
+
         // Init
+        updateNavForSession();
         loadStats();
         loadJobs();
     </script>
