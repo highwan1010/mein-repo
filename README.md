@@ -1,9 +1,10 @@
-# 🏦 FinanzPlus - Moderne Banking Website
+# 🏦 FinanzPlus - Moderne Banking Website mit Login-System
 
-Eine moderne, responsive Banking-Landingpage mit elegantem Design und interaktiven Features.
+Eine moderne, responsive Banking-Landingpage mit vollständigem Authentifizierungs-System.
 
 ## ✨ Features
 
+### Frontend
 - **Responsive Design** - Optimiert für alle Bildschirmgrößen
 - **Moderne UI/UX** - Gradient-Designs, Animationen und Hover-Effekte
 - **Interaktive Elemente** - Smooth Scrolling, Animationen beim Scrollen
@@ -14,30 +15,84 @@ Eine moderne, responsive Banking-Landingpage mit elegantem Design und interaktiv
   - Kontaktformular
   - Statistiken mit Counter-Animation
 
-## 🚀 Verwendung
+### Backend & Authentifizierung
+- **Benutzer-Registrierung** - Sicheres Erstellen neuer Konten
+- **Login-System** - Session-basierte Authentifizierung
+- **Dashboard** - Personalisierter Bereich nach Login
+- **Passwort-Hashing** - BCrypt für sichere Passwort-Speicherung
+- **Session-Management** - Express-Session für sichere Sessions
+- **JSON-Datenbank** - Einfache Benutzerverwaltung
 
-Einfach die `index.html` in einem Browser öffnen:
+## 🚀 Installation & Start
 
+### Voraussetzungen
+- Node.js (Version 14 oder höher)
+- npm (kommt mit Node.js)
+
+### 1. Repository klonen
 ```bash
-# Mit Python
-python -m http.server 8000
-
-# Mit Node.js (wenn http-server installiert ist)
-npx http-server
-
-# Oder einfach Doppelklick auf index.html
+git clone https://github.com/highwan1010/mein-repo.git
+cd mein-repo
 ```
 
-Dann öffne: `http://localhost:8000`
+### 2. Abhängigkeiten installieren
+```bash
+npm install
+```
+
+### 3. Server starten
+```bash
+npm start
+```
+
+### 4. Im Browser öffnen
+Öffne: `http://localhost:3000`
 
 ## 📁 Struktur
 
 ```
-├── index.html      # Hauptseite
-├── styles.css      # Styling
-├── script.js       # Interaktivität
-└── README.md       # Diese Datei
+├── index.html          # Hauptseite (Landing Page)
+├── login.html          # Login-Seite
+├── register.html       # Registrierungs-Seite
+├── dashboard.html      # Dashboard (nach Login)
+├── styles.css          # Styling
+├── script.js           # Frontend-Interaktivität
+├── server.js           # Backend-Server (Express)
+├── package.json        # Node.js Abhängigkeiten
+├── users.json          # Benutzerdatenbank (wird automatisch erstellt)
+├── .gitignore          # Git-Ignorier-Datei
+└── README.md           # Diese Datei
 ```
+
+## 🔐 Authentifizierungs-Features
+
+### Registrierung
+- Vor- und Nachname
+- E-Mail-Validierung
+- Passwort-Stärke-Anzeige
+- Automatisches Login nach Registrierung
+- Generierung einer IBAN
+
+### Login
+- E-Mail und Passwort
+- Passwort anzeigen/verstecken Toggle
+- Session-basierte Authentifizierung
+- Automatische Weiterleitung zum Dashboard
+
+### Dashboard
+- Persönliche Begrüßung
+- Kontostand-Anzeige
+- IBAN-Anzeige
+- Quick Actions
+- Transaktions-Übersicht
+- Logout-Funktion
+
+## 🛡️ Sicherheit
+
+- **BCrypt** - Passwörter werden mit bcrypt gehasht (nicht im Klartext gespeichert)
+- **Sessions** - Sichere Session-Verwaltung mit express-session
+- **Input-Validierung** - Validierung auf Client- und Server-Seite
+- **HTTP-Only Cookies** - Schutz vor XSS-Angriffen
 
 ## 🎨 Design-Features
 

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - FinanzPlus</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .dashboard-page {
+            background: #f1f5f9;
+            min-height: 100vh;
+        }
+
+        .dashboard-nav {
+            background: white;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.05);
+            padding: 15px 0;
+        }
+
+        .dashboard-nav .nav-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+
+        .dashboard-content {
+            padding: 40px 0;
+        }
+
+        .welcome-section {
+            margin-bottom: 40px;
+        }
+
+        .welcome-title {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--dark);
+            margin-bottom: 10px;
+        }
+
+        .welcome-subtitle {
+            color: var(--gray);
+            font-size: 16px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .dashboard-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+
+        .card-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--dark);
+            margin-bottom: 10px;
+        }
+
+        .card-info {
+            color: var(--gray);
+            font-size: 14px;
+        }
+
+        .balance-card {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .balance-card .card-title,
+        .balance-card .card-amount,
+        .balance-card .card-info {
+            color: white;
+        }
+
+        .balance-card .card-icon {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .action-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .action-card i {
+            font-size: 32px;
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+
+        .action-card span {
+            display: block;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .transactions-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 25px;
+            color: var(--dark);
+        }
+
+        .transaction-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .transaction-icon {
+            width: 50px;
+            height: 50px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .transaction-details h4 {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 5px;
+        }
+
+        .transaction-details p {
+            font-size: 14px;
+            color: var(--gray);
+        }
+
+        .transaction-amount {
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .transaction-amount.positive {
+            color: #10b981;
+        }
+
+        .transaction-amount.negative {
+            color: #ef4444;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray);
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body class="dashboard-page">
+    <!-- Navigation -->
+    <nav class="dashboard-nav">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo">
+                    <i class="fas fa-landmark"></i>
+                    <span>FinanzPlus</span>
+                </div>
+                <div class="user-menu">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar"></div>
+                        <div>
+                            <div class="user-name" id="userName">Laden...</div>
+                            <small style="color: var(--gray);" id="userEmail"></small>
+                        </div>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i> Abmelden
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+        <div class="container">
+            <!-- Welcome Section -->
+            <div class="welcome-section">
+                <h1 class="welcome-title">Willkommen zurück, <span id="welcomeName"></span>!</h1>
+                <p class="welcome-subtitle">Hier ist eine Übersicht Ihrer Finanzen</p>
+            </div>
+
+            <!-- Dashboard Cards -->
+            <div class="dashboard-grid">
+                <div class="dashboard-card balance-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Kontostand</div>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-wallet"></i>
+                        </div>
+                    </div>
+                    <div class="card-amount" id="kontostand">0,00 €</div>
+                    <div class="card-info">IBAN: <span id="kontonummer">Laden...</span></div>
+                </div>
+
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Ausgaben (Monat)</div>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-arrow-down"></i>
+                        </div>
+                    </div>
+                    <div class="card-amount">0,00 €</div>
+                    <div class="card-info">Im Vergleich zum Vormonat</div>
+                </div>
+
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Einnahmen (Monat)</div>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                    </div>
+                    <div class="card-amount">0,00 €</div>
+                    <div class="card-info">Im Vergleich zum Vormonat</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <div class="action-card">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Überweisung</span>
+                </div>
+                <div class="action-card">
+                    <i class="fas fa-exchange-alt"></i>
+                    <span>Dauerauftrag</span>
+                </div>
+                <div class="action-card">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Karten</span>
+                </div>
+                <div class="action-card">
+                    <i class="fas fa-file-invoice"></i>
+                    <span>Rechnungen</span>
+                </div>
+            </div>
+
+            <!-- Transactions -->
+            <div class="transactions-section">
+                <h2 class="section-title">Letzte Transaktionen</h2>
+                <div id="transactionsList">
+                    <div class="empty-state">
+                        <i class="fas fa-receipt"></i>
+                        <h3>Keine Transaktionen</h3>
+                        <p>Ihre zukünftigen Transaktionen werden hier angezeigt</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Prüfe Authentifizierung
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-session');
+                const data = await response.json();
+                
+                if (!data.isAuthenticated) {
+                    window.location.href = 'login.html';
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = 'login.html';
+                return false;
+            }
+        }
+
+        // Lade Benutzerdaten
+        async function loadUserData() {
+            try {
+                const response = await fetch('/api/user');
+                if (!response.ok) {
+                    throw new Error('Fehler beim Laden der Benutzerdaten');
+                }
+                
+                const user = await response.json();
+                
+                // Update UI
+                document.getElementById('userName').textContent = `${user.vorname} ${user.nachname}`;
+                document.getElementById('userEmail').textContent = user.email;
+                document.getElementById('welcomeName').textContent = user.vorname;
+                document.getElementById('kontostand').textContent = 
+                    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(user.kontostand);
+                document.getElementById('kontonummer').textContent = user.kontonummer;
+                
+                // Avatar Initialen
+                const initials = user.vorname.charAt(0) + user.nachname.charAt(0);
+                document.getElementById('userAvatar').textContent = initials.toUpperCase();
+                
+            } catch (error) {
+                console.error('Fehler beim Laden der Benutzerdaten:', error);
+                alert('Fehler beim Laden der Benutzerdaten');
+            }
+        }
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    window.location.href = 'index.html';
+                } else {
+                    alert('Fehler beim Abmelden');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Fehler beim Abmelden');
+            }
+        });
+
+        // Initialisierung
+        (async () => {
+            const isAuth = await checkAuth();
+            if (isAuth) {
+                await loadUserData();
+            }
+        })();
+
+        // Demo: Transaktionen hinzufügen
+        const demoTransactions = [
+            {
+                icon: 'fa-shopping-bag',
+                iconColor: '#6366f1',
+                title: 'Amazon',
+                date: 'Heute, 14:23',
+                amount: -45.99,
+            },
+            {
+                icon: 'fa-coffee',
+                iconColor: '#8b5cf6',
+                title: 'Starbucks',
+                date: 'Heute, 10:15',
+                amount: -4.50,
+            },
+            {
+                icon: 'fa-building',
+                iconColor: '#10b981',
+                title: 'Gehalt',
+                date: 'Gestern',
+                amount: 3500.00,
+            }
+        ];
+
+        // Uncomment to show demo transactions:
+        // setTimeout(() => {
+        //     const list = document.getElementById('transactionsList');
+        //     list.innerHTML = demoTransactions.map(tx => `
+        //         <div class="transaction-item">
+        //             <div class="transaction-left">
+        //                 <div class="transaction-icon" style="color: ${tx.iconColor}">
+        //                     <i class="fas ${tx.icon}"></i>
+        //                 </div>
+        //                 <div class="transaction-details">
+        //                     <h4>${tx.title}</h4>
+        //                     <p>${tx.date}</p>
+        //                 </div>
+        //             </div>
+        //             <div class="transaction-amount ${tx.amount > 0 ? 'positive' : 'negative'}">
+        //                 ${tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)} €
+        //             </div>
+        //         </div>
+        //     `).join('');
+        // }, 500);
+    </script>
+</body>
+</html>
