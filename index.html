@@ -44,21 +44,37 @@
         <div class="container">
             <div class="hero-content">
                 <h1>Finden Sie Ihren <span class="highlight">Traumjob</span></h1>
-                <p class="hero-subtitle">Tausende Jobs von Top-Unternehmen warten auf Sie. Starten Sie Ihre Karriere noch heute!</p>
+                <p class="hero-subtitle">Entdecken Sie handverlesene Stellen, verfolgen Sie Ihre Bewerbungen transparent und erledigen Sie alle nächsten Schritte direkt im Dashboard.</p>
+                <div class="feature-list" style="margin-top: 16px; margin-bottom: 0;">
+                    <div class="feature-item">
+                        <i class="fas fa-compass"></i>
+                        <div>
+                            <h4>Klare Orientierung</h4>
+                            <p>Alle relevanten Jobinformationen kompakt und verständlich an einem Ort.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-list-check"></i>
+                        <div>
+                            <h4>Konkrete Aufgaben</h4>
+                            <p>Im Dashboard sehen Sie zugewiesene Aufgaben und setzen diese Schritt für Schritt um.</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap;">
+                    <button class="btn-primary" onclick="window.location.href='jobs.html'">Zu den Jobs</button>
+                    <button class="btn-secondary" onclick="window.location.href='register.html'">Kostenlos registrieren</button>
+                </div>
             </div>
-            
-            <div class="hero-stats">
-                <div class="stat-card">
-                    <div class="stat-number" id="totalJobs">0</div>
-                    <div class="stat-label">Aktive Jobs</div>
+
+            <div>
+                <div class="image-placeholder" style="min-height: 320px; font-size: 82px; margin-bottom: 14px;">
+                    <i class="fas fa-rocket"></i>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="totalCompanies">0</div>
-                    <div class="stat-label">Unternehmen</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="totalApplications">0</div>
-                    <div class="stat-label">Bewerbungen</div>
+                <div class="job-card">
+                    <h3 style="margin-bottom: 10px;"><i class="fas fa-lightbulb"></i> Ihr nächster Schritt</h3>
+                    <p style="margin-bottom: 10px;">Öffnen Sie den Tab <strong>Jobs</strong>, wählen Sie passende Stellen und bewerben Sie sich direkt online.</p>
+                    <p style="color: var(--gray); margin: 0;">Danach behalten Sie alles im Dashboard inklusive Aufgaben und Status im Blick.</p>
                 </div>
             </div>
         </div>
@@ -191,21 +207,6 @@
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
 
-        // Statistiken laden
-        async function loadStats() {
-            try {
-                const response = await fetch(`${API_BASE}/api/stats`);
-                const data = await response.json();
-                if (data.success) {
-                    document.getElementById('totalJobs').textContent = data.stats.totalJobs;
-                    document.getElementById('totalCompanies').textContent = data.stats.totalArbeitgeber;
-                    document.getElementById('totalApplications').textContent = data.stats.totalBewerbungen;
-                }
-            } catch (error) {
-                console.error('Fehler beim Laden der Statistiken:', error);
-            }
-        }
-
         async function updateNavForSession() {
             try {
                 const response = await fetch(`${API_BASE}/api/check-session`);
@@ -252,7 +253,6 @@
 
         // Init
         updateNavForSession();
-        loadStats();
     </script>
 </body>
 </html>
