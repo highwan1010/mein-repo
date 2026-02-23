@@ -42,6 +42,7 @@ const {
     getTasksByUser,
     getAllTasksAdmin,
     updateTaskStatusForUser,
+    updateTaskStatusByAdmin,
     createTerminByBewerber,
     getTermineByUser,
     getAllTermineAdmin,
@@ -819,11 +820,6 @@ app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
 
 app.get('/api/termine', requireAuth, async (req, res) => {
     try {
-        const user = await findUserById(req.authUserId);
-        if (!user || user.user_typ !== 'bewerber') {
-            return res.status(403).json({ error: 'Nur Bewerber können Termine abrufen' });
-        }
-
         const termine = await getTermineByUser(req.authUserId);
         res.json({ success: true, termine });
     } catch (error) {
@@ -833,11 +829,6 @@ app.get('/api/termine', requireAuth, async (req, res) => {
 
 app.post('/api/termine', requireAuth, async (req, res) => {
     try {
-        const user = await findUserById(req.authUserId);
-        if (!user || user.user_typ !== 'bewerber') {
-            return res.status(403).json({ error: 'Nur Bewerber können Termine buchen' });
-        }
-
         const name = String((req.body && req.body.name) || '').trim();
         const email = String((req.body && req.body.email) || '').trim().toLowerCase();
         const datum = String((req.body && req.body.datum) || '').trim();
@@ -1246,6 +1237,26 @@ app.get('/api/admin/tasks', requireAdmin, async (req, res) => {
         res.json({ success: true, tasks });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Aufgaben' });
+    }
+});
+
+app.patch('/api/admin/tasks/:id/status', requireAdmin, async (req, res) => {
+    try {
+        const status = String((req.body && req.body.status) || '').trim().toLowerCase();
+        const allowedTaskStatus = ['offen', 'in_bearbeitung', 'erledigt'];
+
+        if (!allowedTaskStatus.includes(status)) {
+            return res.status(400).json({ error: 'Ungültiger Aufgaben-Status' });
+        }
+
+        const task = await updateTaskStatusByAdmin(req.params.id, status);
+        if (!task) {
+            return res.status(404).json({ error: 'Aufgabe nicht gefunden' });
+        }
+
+        res.json({ success: true, task });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Aktualisieren der Aufgabe' });
     }
 });
 

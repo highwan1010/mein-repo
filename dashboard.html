@@ -200,26 +200,32 @@
             }
             currentUser = await api('/api/user');
 
-            if (currentUser.user_typ === 'admin') {
+            const params = new URLSearchParams(window.location.search);
+            const requestedTab = String(params.get('tab') || '').trim().toLowerCase();
+            const forceAppointmentsMode = requestedTab === 'appointments';
+            const normalizedUserType = String(currentUser.user_typ || '').trim().toLowerCase();
+            const isArbeitgeber = normalizedUserType === 'arbeitgeber';
+            const isBewerber = normalizedUserType === 'bewerber';
+
+            if (normalizedUserType === 'admin' && !forceAppointmentsMode) {
                 window.location.href = 'admin.html';
                 return;
             }
 
             document.getElementById('welcome').textContent = `Hallo, ${currentUser.vorname}!`;
-            const normalizedUserType = String(currentUser.user_typ || '').trim().toLowerCase();
-            const isArbeitgeber = normalizedUserType === 'arbeitgeber';
-            const isBewerber = normalizedUserType === 'bewerber';
 
             document.getElementById('subtitle').textContent = isArbeitgeber
                 ? 'Verwalten Sie Ihre Stellen und Bewerbungsprozesse.'
                 : 'Entdecken Sie passende Stellen und verfolgen Sie Ihren Vermittlungsstatus.';
-            document.getElementById('userBadge').textContent = isArbeitgeber ? 'Arbeitgeber' : 'Bewerber';
+            document.getElementById('userBadge').textContent = isArbeitgeber
+                ? 'Arbeitgeber'
+                : (normalizedUserType === 'admin' ? 'Admin' : 'Bewerber');
 
             if (isArbeitgeber) {
                 document.getElementById('arbeitgeberActions').style.display = 'block';
                 document.getElementById('listTitle').textContent = 'Meine veröffentlichten Jobs';
                 document.getElementById('bewerberCalendarSection').style.display = 'none';
-            } else if (isBewerber) {
+            } else if (isBewerber || forceAppointmentsMode) {
                 document.getElementById('listTitle').textContent = 'Meine Bewerbungen';
                 document.getElementById('bewerberCalendarSection').style.display = 'block';
                 const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
