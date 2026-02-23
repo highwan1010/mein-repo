@@ -106,7 +106,6 @@
         border-radius: 13px;
         font-size: 14px;
         line-height: 1.4;
-        white-space: pre-wrap;
         border: 1px solid var(--border);
         background: var(--white);
     }
@@ -129,7 +128,10 @@
         margin-bottom: 2px;
     }
     .jc-chat-time { color: var(--gray); font-size: 11px; }
-    .jc-chat-text { color: var(--dark); }
+    .jc-chat-text {
+        color: var(--dark);
+        white-space: pre-wrap;
+    }
     .jc-chat-foot {
         padding: 10px;
         border-top: 1px solid var(--border);
