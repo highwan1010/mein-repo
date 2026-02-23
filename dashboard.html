@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - JobConnect</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo"><i class="fas fa-briefcase"></i><span>JobConnect</span></div>
+                <div class="nav-buttons">
+                    <button class="btn-secondary" onclick="window.location.href='index.html'">Startseite</button>
+                    <button class="btn-danger" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="dashboard">
+        <div class="container">
+            <div class="dashboard-top">
+                <div>
+                    <h1 id="welcome">Dashboard</h1>
+                    <p id="subtitle" style="color: var(--gray);"></p>
+                </div>
+                <div class="badge" id="userBadge">Laden...</div>
+            </div>
+
+            <div class="panel-grid">
+                <div class="panel">
+                    <div style="color: var(--gray);">Meine Jobs</div>
+                    <div class="value" id="countJobs">0</div>
+                </div>
+                <div class="panel">
+                    <div style="color: var(--gray);">Meine Bewerbungen</div>
+                    <div class="value" id="countBewerbungen">0</div>
+                </div>
+                <div class="panel">
+                    <div style="color: var(--gray);">Gespeicherte Jobs</div>
+                    <div class="value" id="countFavoriten">0</div>
+                </div>
+            </div>
+
+            <section class="card" id="arbeitgeberActions" style="display:none;">
+                <h2 style="margin-bottom: 10px;">Job erstellen</h2>
+                <form id="jobForm">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="titel">Titel</label>
+                            <input class="form-input" id="titel" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="firma">Firma</label>
+                            <input class="form-input" id="firma" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="standort">Standort</label>
+                            <input class="form-input" id="standort" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="jobTyp">Beschäftigungsart</label>
+                            <select class="form-input" id="jobTyp" required>
+                                <option>Vollzeit</option>
+                                <option>Teilzeit</option>
+                                <option>Freelance</option>
+                                <option>Remote</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="kategorie">Kategorie</label>
+                            <input class="form-input" id="kategorie" placeholder="IT & Software" />
+                        </div>
+                        <div class="form-group">
+                            <label for="branche">Branche</label>
+                            <input class="form-input" id="branche" placeholder="Technologie" />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="gehaltVon">Gehalt von (€)</label>
+                            <input class="form-input" id="gehaltVon" type="number" min="0" />
+                        </div>
+                        <div class="form-group">
+                            <label for="gehaltBis">Gehalt bis (€)</label>
+                            <input class="form-input" id="gehaltBis" type="number" min="0" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="erfahrung">Erfahrung</label>
+                        <input class="form-input" id="erfahrung" placeholder="2-4 Jahre" />
+                    </div>
+                    <div class="form-group">
+                        <label for="beschreibung">Beschreibung</label>
+                        <textarea class="form-input" id="beschreibung" rows="4" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="anforderungen">Anforderungen</label>
+                        <textarea class="form-input" id="anforderungen" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="benefits">Benefits</label>
+                        <textarea class="form-input" id="benefits" rows="3"></textarea>
+                    </div>
+                    <button class="btn-success" type="submit"><i class="fas fa-plus"></i> Job veröffentlichen</button>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
+                <div id="listContainer">Lade Daten...</div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        let currentUser = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        async function api(path, options = {}) {
+            const response = await fetch(path, options);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Fehler');
+            return data;
+        }
+
+        async function loadCurrentUser() {
+            const session = await api('/api/check-session');
+            if (!session.isAuthenticated) {
+                window.location.href = 'login.html';
+                return;
+            }
+            currentUser = await api('/api/user');
+            document.getElementById('welcome').textContent = `Hallo, ${currentUser.vorname}!`;
+            document.getElementById('subtitle').textContent = currentUser.user_typ === 'arbeitgeber'
+                ? 'Verwalten Sie Ihre Jobs und Bewerbungen.'
+                : 'Entdecken Sie passende Jobs und verfolgen Sie Ihre Bewerbungen.';
+            document.getElementById('userBadge').textContent = currentUser.user_typ === 'arbeitgeber' ? 'Arbeitgeber' : 'Bewerber';
+
+            if (currentUser.user_typ === 'arbeitgeber') {
+                document.getElementById('arbeitgeberActions').style.display = 'block';
+                document.getElementById('listTitle').textContent = 'Meine veröffentlichten Jobs';
+            } else {
+                document.getElementById('listTitle').textContent = 'Meine Bewerbungen';
+            }
+        }
+
+        async function loadData() {
+            if (!currentUser) return;
+
+            if (currentUser.user_typ === 'arbeitgeber') {
+                const jobsRes = await api('/api/my-jobs');
+                document.getElementById('countJobs').textContent = jobsRes.jobs.length;
+                const list = jobsRes.jobs;
+                document.getElementById('listContainer').innerHTML = list.length ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Titel</th>
+                                <th>Standort</th>
+                                <th>Typ</th>
+                                <th>Status</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${list.map(job => `
+                                <tr>
+                                    <td>${escapeHtml(job.titel)}</td>
+                                    <td>${escapeHtml(job.standort)}</td>
+                                    <td>${escapeHtml(job.job_typ)}</td>
+                                    <td><span class="badge ${job.status === 'aktiv' ? 'success' : 'warning'}">${escapeHtml(job.status)}</span></td>
+                                    <td>
+                                        <button class="btn-secondary" onclick="openJob(${job.id})">Ansehen</button>
+                                        <button class="btn-danger" onclick="deleteJob(${job.id})">Löschen</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p>Sie haben noch keine Jobs veröffentlicht.</p>';
+
+                document.getElementById('countBewerbungen').textContent = '—';
+                document.getElementById('countFavoriten').textContent = '—';
+            } else {
+                const bew = await api('/api/my-bewerbungen');
+                const fav = await api('/api/favoriten');
+                document.getElementById('countJobs').textContent = '—';
+                document.getElementById('countBewerbungen').textContent = bew.bewerbungen.length;
+                document.getElementById('countFavoriten').textContent = fav.favoriten.length;
+
+                document.getElementById('listContainer').innerHTML = bew.bewerbungen.length ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Job</th>
+                                <th>Firma</th>
+                                <th>Standort</th>
+                                <th>Status</th>
+                                <th>Datum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${bew.bewerbungen.map(item => `
+                                <tr>
+                                    <td>${escapeHtml(item.titel)}</td>
+                                    <td>${escapeHtml(item.firma)}</td>
+                                    <td>${escapeHtml(item.standort)}</td>
+                                    <td><span class="badge">${escapeHtml(item.status)}</span></td>
+                                    <td>${new Date(item.erstellt_am).toLocaleDateString('de-DE')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p>Sie haben noch keine Bewerbungen gesendet.</p>';
+            }
+        }
+
+        async function deleteJob(id) {
+            if (!confirm('Job wirklich löschen?')) return;
+            try {
+                await api(`/api/jobs/${id}`, { method: 'DELETE' });
+                await loadData();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function openJob(id) {
+            window.location.href = `job-details.html?id=${id}`;
+        }
+
+        document.getElementById('jobForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                titel: document.getElementById('titel').value,
+                firma: document.getElementById('firma').value,
+                standort: document.getElementById('standort').value,
+                jobTyp: document.getElementById('jobTyp').value,
+                kategorie: document.getElementById('kategorie').value,
+                branche: document.getElementById('branche').value,
+                gehaltVon: document.getElementById('gehaltVon').value || null,
+                gehaltBis: document.getElementById('gehaltBis').value || null,
+                erfahrung: document.getElementById('erfahrung').value,
+                beschreibung: document.getElementById('beschreibung').value,
+                anforderungen: document.getElementById('anforderungen').value,
+                benefits: document.getElementById('benefits').value
+            };
+
+            try {
+                await api('/api/jobs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                e.target.reset();
+                await loadData();
+                alert('Job erfolgreich veröffentlicht.');
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await api('/api/logout', { method: 'POST' });
+            window.location.href = 'index.html';
+        });
+
+        (async () => {
+            try {
+                await loadCurrentUser();
+                await loadData();
+            } catch (err) {
+                alert(err.message);
+            }
+        })();
+    </script>
+</body>
+</html>

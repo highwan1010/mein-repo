@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Registrierung - JobConnect</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="auth-page">
+    <div class="auth-card">
+        <div class="auth-head">
+            <div class="logo" style="justify-content: center;">
+                <i class="fas fa-briefcase"></i><span>JobConnect</span>
+            </div>
+            <h1>Konto erstellen</h1>
+            <p>Registrieren Sie sich als Bewerber oder Arbeitgeber</p>
+        </div>
+
+        <div id="alert"></div>
+
+        <form id="registerForm">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label for="vorname">Vorname</label>
+                    <input class="form-input" type="text" id="vorname" required />
+                </div>
+                <div class="form-group">
+                    <label for="nachname">Nachname</label>
+                    <input class="form-input" type="text" id="nachname" required />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-Mail</label>
+                <input class="form-input" type="email" id="email" required />
+            </div>
+
+            <div class="form-group">
+                <label for="passwort">Passwort</label>
+                <input class="form-input" type="password" id="passwort" minlength="6" required />
+            </div>
+
+            <div class="form-group">
+                <label for="userTyp">Konto-Typ</label>
+                <select class="form-input" id="userTyp" required>
+                    <option value="bewerber">Bewerber</option>
+                    <option value="arbeitgeber">Arbeitgeber</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="firmaGroup" style="display:none;">
+                <label for="firma">Firmenname</label>
+                <input class="form-input" type="text" id="firma" />
+            </div>
+
+            <button class="btn-primary" style="width:100%;" type="submit">
+                <i class="fas fa-user-plus"></i> Registrieren
+            </button>
+        </form>
+
+        <div class="auth-links">
+            Bereits registriert? <a href="login.html">Zum Login</a><br/>
+            <a href="index.html">Zurück zur Startseite</a>
+        </div>
+    </div>
+
+    <script>
+        const userTyp = document.getElementById('userTyp');
+        const firmaGroup = document.getElementById('firmaGroup');
+        const firmaInput = document.getElementById('firma');
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('typ') === 'arbeitgeber') {
+            userTyp.value = 'arbeitgeber';
+        }
+
+        function syncFirma() {
+            const isArbeitgeber = userTyp.value === 'arbeitgeber';
+            firmaGroup.style.display = isArbeitgeber ? 'block' : 'none';
+            firmaInput.required = isArbeitgeber;
+        }
+
+        syncFirma();
+        userTyp.addEventListener('change', syncFirma);
+
+        function showAlert(message, type = 'error') {
+            document.getElementById('alert').innerHTML = `<div class="alert ${type}">${message}</div>`;
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const payload = {
+                vorname: document.getElementById('vorname').value,
+                nachname: document.getElementById('nachname').value,
+                email: document.getElementById('email').value,
+                passwort: document.getElementById('passwort').value,
+                userTyp: userTyp.value,
+                firma: firmaInput.value || null
+            };
+
+            const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                showAlert('Registrierung erfolgreich. Weiterleitung...', 'success');
+                setTimeout(() => window.location.href = 'dashboard.html', 600);
+            } else {
+                showAlert(data.error || 'Registrierung fehlgeschlagen');
+            }
+        });
+    </script>
+</body>
+</html>

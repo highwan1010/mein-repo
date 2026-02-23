@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobConnect - Ihre Karriere beginnt hier</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo">
+                    <i class="fas fa-briefcase"></i>
+                    <span>JobConnect</span>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#jobs">Jobs</a></li>
+                    <li><a href="#arbeitgeber">Für Arbeitgeber</a></li>
+                    <li><a href="#kontakt">Kontakt</a></li>
+                </ul>
+                <div class="nav-buttons">
+                    <button class="btn-secondary" onclick="window.location.href='login.html'">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    <button class="btn-primary" onclick="window.location.href='register.html'">
+                        <i class="fas fa-user-plus"></i> Registrieren
+                    </button>
+                </div>
+                <div class="hamburger">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Finden Sie Ihren <span class="highlight">Traumjob</span></h1>
+                <p class="hero-subtitle">Tausende Jobs von Top-Unternehmen warten auf Sie. Starten Sie Ihre Karriere noch heute!</p>
+                
+                <div class="search-box">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" placeholder="Job, Firma, Stichwort...">
+                    </div>
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <input type="text" id="locationInput" placeholder="Standort...">
+                    </div>
+                    <button class="btn-primary btn-large" onclick="searchJobs()">
+                        Jobs suchen
+                    </button>
+                </div>
+
+                <div class="quick-categories">
+                    <span>Beliebte Kategorien:</span>
+                    <a href="#" class="category-tag">IT & Software</a>
+                    <a href="#" class="category-tag">Marketing</a>
+                    <a href="#" class="category-tag">Vertrieb</a>
+                    <a href="#" class="category-tag">Finanzen</a>
+                </div>
+            </div>
+            
+            <div class="hero-stats">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalJobs">0</div>
+                    <div class="stat-label">Aktive Jobs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalCompanies">0</div>
+                    <div class="stat-label">Unternehmen</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalApplications">0</div>
+                    <div class="stat-label">Bewerbungen</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Jobs Section -->
+    <section class="jobs-section" id="jobs">
+        <div class="container">
+            <div class="section-header">
+                <h2>Aktuelle Jobangebote</h2>
+                <p>Entdecken Sie die neuesten Stellenangebote von Top-Arbeitgebern</p>
+            </div>
+
+            <div class="job-filters">
+                <select id="filterCategory" onchange="filterJobs()">
+                    <option value="">Alle Kategorien</option>
+                    <option value="IT & Software">IT & Software</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Vertrieb">Vertrieb</option>
+                    <option value="Finanzen">Finanzen</option>
+                    <option value="HR">Personal / HR</option>
+                    <option value="Engineering">Engineering</option>
+                </select>
+
+                <select id="filterJobTyp" onchange="filterJobs()">
+                    <option value="">Alle Beschäftigungsarten</option>
+                    <option value="Vollzeit">Vollzeit</option>
+                    <option value="Teilzeit">Teilzeit</option>
+                    <option value="Freelance">Freelance</option>
+                    <option value="Remote">Remote</option>
+                </select>
+            </div>
+
+            <div class="jobs-grid" id="jobsGrid">
+                <!-- Jobs werden hier dynamisch geladen -->
+                <div class="loading">Lade Jobs...</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Arbeitgeber Section -->
+    <section class="arbeitgeber-section" id="arbeitgeber">
+        <div class="container">
+            <div class="arbeitgeber-content">
+                <div class="arbeitgeber-text">
+                    <h2>Für <span class="highlight">Arbeitgeber</span></h2>
+                    <p class="lead">Finden Sie die besten Talente für Ihr Unternehmen</p>
+                    
+                    <div class="feature-list">
+                        <div class="feature-item">
+                            <i class="fas fa-users"></i>
+                            <div>
+                                <h4>Zugang zu Top-Talenten</h4>
+                                <p>Erreichen Sie qualifizierte Kandidaten aus allen Branchen</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-chart-line"></i>
+                            <div>
+                                <h4>Einfaches Bewerbermanagement</h4>
+                                <p>Verwalten Sie alle Bewerbungen zentral an einem Ort</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-clock"></i>
+                            <div>
+                                <h4>Schnelle Besetzung</h4>
+                                <p>Reduzieren Sie Ihre Time-to-Hire deutlich</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary btn-large" onclick="window.location.href='register.html?typ=arbeitgeber'">
+                        Als Arbeitgeber registrieren
+                    </button>
+                </div>
+                
+                <div class="arbeitgeber-image">
+                    <div class="image-placeholder">
+                        <i class="fas fa-building"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Bereit für den nächsten Karriereschritt?</h2>
+                <p>Registrieren Sie sich kostenlos und bewerben Sie sich noch heute auf Ihren Traumjob!</p>
+                <button class="btn-primary btn-large" onclick="window.location.href='register.html'">
+                    Jetzt kostenlos registrieren
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-column">
+                    <div class="footer-logo">
+                        <i class="fas fa-briefcase"></i>
+                        <span>JobConnect</span>
+                    </div>
+                    <p>Die führende Job-Plattform für Ihre Karriere. Verbinden Sie sich mit Top-Unternehmen.</p>
+                </div>
+                <div class="footer-column">
+                    <h4>Für Bewerber</h4>
+                    <ul>
+                        <li><a href="#">Jobs suchen</a></li>
+                        <li><a href="register.html">Registrieren</a></li>
+                        <li><a href="login.html">Login</a></li>
+                        <li><a href="#">Karriere-Tipps</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Für Arbeitgeber</h4>
+                    <ul>
+                        <li><a href="#">Jobs posten</a></li>
+                        <li><a href="#">Preise</a></li>
+                        <li><a href="#">Talent Search</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Unternehmen</h4>
+                    <ul>
+                        <li><a href="#">Über uns</a></li>
+                        <li><a href="#kontakt">Kontakt</a></li>
+                        <li><a href="#">Impressum</a></li>
+                        <li><a href="#">Datenschutz</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 JobConnect. Alle Rechte vorbehalten.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Statistiken laden
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('totalJobs').textContent = data.stats.totalJobs;
+                    document.getElementById('totalCompanies').textContent = data.stats.totalArbeitgeber;
+                    document.getElementById('totalApplications').textContent = data.stats.totalBewerbungen;
+                }
+            } catch (error) {
+                console.error('Fehler beim Laden der Statistiken:', error);
+            }
+        }
+
+        // Jobs laden
+        async function loadJobs(filters = {}) {
+            const grid = document.getElementById('jobsGrid');
+            grid.innerHTML = '<div class="loading">Lade Jobs...</div>';
+
+            try {
+                const params = new URLSearchParams(filters);
+                const response = await fetch(`/api/jobs?${params}`);
+                const data = await response.json();
+
+                if (data.success && data.jobs.length > 0) {
+                    grid.innerHTML = data.jobs.map(job => `
+                        <div class="job-card">
+                            <div class="job-header">
+                                <div class="company-logo">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <div class="job-title-section">
+                                    <h3>${job.titel}</h3>
+                                    <p class="company-name">${job.firma}</p>
+                                </div>
+                            </div>
+                            <div class="job-details">
+                                <span><i class="fas fa-map-marker-alt"></i> ${job.standort}</span>
+                                <span><i class="fas fa-briefcase"></i> ${job.job_typ}</span>
+                                ${job.gehalt_von ? `<span><i class="fas fa-euro-sign"></i> ${job.gehalt_von}€ - ${job.gehalt_bis}€</span>` : ''}
+                            </div>
+                            <p class="job-description">${job.beschreibung.substring(0, 150)}...</p>
+                            <div class="job-footer">
+                                <span class="job-date">${new Date(job.erstellt_am).toLocaleDateString('de-DE')}</span>
+                                <button class="btn-primary" onclick="window.location.href='job-details.html?id=${job.id}'">
+                                    Details ansehen
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    grid.innerHTML = '<div class="no-jobs">Keine Jobs gefunden</div>';
+                }
+            } catch (error) {
+                grid.innerHTML = '<div class="error">Fehler beim Laden der Jobs</div>';
+                console.error('Fehler:', error);
+            }
+        }
+
+        // Filter
+        function filterJobs() {
+            const filters = {
+                kategorie: document.getElementById('filterCategory').value,
+                jobTyp: document.getElementById('filterJobTyp').value
+            };
+            loadJobs(filters);
+        }
+
+        // Suche
+        function searchJobs() {
+            const search = document.getElementById('searchInput').value;
+            const standort = document.getElementById('locationInput').value;
+            loadJobs({ search, standort });
+        }
+
+        // Init
+        loadStats();
+        loadJobs();
+    </script>
+</body>
+</html>

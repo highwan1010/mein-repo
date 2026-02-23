@@ -1,0 +1,16 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+jobportal.db
+
+# Env
+.env
+
+# IDE
+.vscode/
+.idea/

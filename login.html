@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - JobConnect</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="auth-page">
+    <div class="auth-card">
+        <div class="auth-head">
+            <div class="logo" style="justify-content: center;">
+                <i class="fas fa-briefcase"></i><span>JobConnect</span>
+            </div>
+            <h1>Willkommen zurück</h1>
+            <p>Melden Sie sich in Ihrem Konto an</p>
+        </div>
+
+        <div id="alert"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">E-Mail</label>
+                <input class="form-input" type="email" id="email" required />
+            </div>
+            <div class="form-group">
+                <label for="passwort">Passwort</label>
+                <input class="form-input" type="password" id="passwort" required />
+            </div>
+            <button class="btn-primary" style="width:100%;" type="submit">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+        </form>
+
+        <div class="auth-links">
+            Noch kein Konto? <a href="register.html">Jetzt registrieren</a><br/>
+            <a href="index.html">Zurück zur Startseite</a>
+        </div>
+    </div>
+
+    <script>
+        function showAlert(message, type = 'error') {
+            document.getElementById('alert').innerHTML = `<div class="alert ${type}">${message}</div>`;
+        }
+
+        fetch('/api/check-session')
+            .then(r => r.json())
+            .then(data => {
+                if (data.isAuthenticated) {
+                    window.location.href = 'dashboard.html';
+                }
+            });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: document.getElementById('email').value,
+                    passwort: document.getElementById('passwort').value
+                })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                showAlert('Login erfolgreich. Weiterleitung...', 'success');
+                setTimeout(() => window.location.href = 'dashboard.html', 600);
+            } else {
+                showAlert(data.error || 'Login fehlgeschlagen');
+            }
+        });
+    </script>
+</body>
+</html>
