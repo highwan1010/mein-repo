@@ -114,8 +114,20 @@
             </section>
 
             <section class="card">
-                <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
-                <div id="listContainer">Lade Daten...</div>
+                <div style="display:flex; gap:10px; margin-bottom: 12px;">
+                    <button class="btn-primary" id="tabMainBtn" type="button" onclick="switchDashboardTab('main')">Übersicht</button>
+                    <button class="btn-secondary" id="tabTasksBtn" type="button" onclick="switchDashboardTab('tasks')">Aufgaben</button>
+                </div>
+
+                <div id="mainTabPane">
+                    <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
+                    <div id="listContainer">Lade Daten...</div>
+                </div>
+
+                <div id="tasksTabPane" style="display:none;">
+                    <h2 style="margin-bottom: 10px;">Meine Aufgaben</h2>
+                    <div id="tasksContainer">Lade Aufgaben...</div>
+                </div>
             </section>
         </div>
     </main>
@@ -241,6 +253,81 @@
             }
         }
 
+        async function loadTasks() {
+            const container = document.getElementById('tasksContainer');
+            container.innerHTML = 'Lade Aufgaben...';
+
+            try {
+                const taskRes = await api('/api/tasks');
+                const tasks = taskRes.tasks || [];
+
+                container.innerHTML = tasks.length ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Titel</th>
+                                <th>Beschreibung</th>
+                                <th>Status</th>
+                                <th>Fällig</th>
+                                <th>Admin</th>
+                                <th>Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tasks.map(task => `
+                                <tr>
+                                    <td>${escapeHtml(task.titel || '—')}</td>
+                                    <td>${escapeHtml(task.beschreibung || '—')}</td>
+                                    <td><span class="badge ${task.status === 'erledigt' ? 'success' : 'warning'}">${escapeHtml(task.status || 'offen')}</span></td>
+                                    <td>${task.faellig_am ? new Date(task.faellig_am).toLocaleDateString('de-DE') : '—'}</td>
+                                    <td>${escapeHtml(`${task.admin_vorname || ''} ${task.admin_nachname || ''}`.trim() || task.admin_email || '—')}</td>
+                                    <td>
+                                        ${task.status !== 'erledigt'
+                                            ? `<button class="btn-success" onclick="markTaskDone(${task.id})">Erledigt</button>`
+                                            : '<span style="color: var(--success); font-weight:600;">✓</span>'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p>Keine Aufgaben zugewiesen.</p>';
+            } catch (error) {
+                container.innerHTML = '<p>Fehler beim Laden der Aufgaben.</p>';
+            }
+        }
+
+        async function markTaskDone(taskId) {
+            try {
+                await api(`/api/tasks/${taskId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'erledigt' })
+                });
+                await loadTasks();
+            } catch (error) {
+                alert(error.message || 'Aufgabe konnte nicht aktualisiert werden.');
+            }
+        }
+
+        function switchDashboardTab(tab) {
+            const mainPane = document.getElementById('mainTabPane');
+            const taskPane = document.getElementById('tasksTabPane');
+            const mainBtn = document.getElementById('tabMainBtn');
+            const tasksBtn = document.getElementById('tabTasksBtn');
+
+            if (tab === 'tasks') {
+                mainPane.style.display = 'none';
+                taskPane.style.display = 'block';
+                mainBtn.className = 'btn-secondary';
+                tasksBtn.className = 'btn-primary';
+            } else {
+                mainPane.style.display = 'block';
+                taskPane.style.display = 'none';
+                mainBtn.className = 'btn-primary';
+                tasksBtn.className = 'btn-secondary';
+            }
+        }
+
         async function deleteJob(id) {
             if (!confirm('Job wirklich löschen?')) return;
             try {
@@ -295,6 +382,7 @@
             try {
                 await loadCurrentUser();
                 await loadData();
+                await loadTasks();
             } catch (err) {
                 alert(err.message);
             }

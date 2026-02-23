@@ -132,6 +132,37 @@
             </section>
 
             <section class="card">
+                <h2 style="margin-bottom: 10px;">Aufgaben zuteilen</h2>
+                <div id="taskManageAlert"></div>
+                <form id="assignTaskForm" style="margin-bottom: 16px;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="taskUserId">Bewerber</label>
+                            <select class="form-input" id="taskUserId" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="taskTitel">Titel</label>
+                            <input class="form-input" id="taskTitel" type="text" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="taskFaelligAm">Fällig am (optional)</label>
+                            <input class="form-input" id="taskFaelligAm" type="date" />
+                        </div>
+                        <div class="form-group">
+                            <label for="taskBeschreibung">Beschreibung (optional)</label>
+                            <input class="form-input" id="taskBeschreibung" type="text" />
+                        </div>
+                    </div>
+                    <button class="btn-primary" type="submit">
+                        <i class="fas fa-list-check"></i> Aufgabe zuweisen
+                    </button>
+                </form>
+                <div id="tasksTable">Lade Daten...</div>
+            </section>
+
+            <section class="card">
                 <h2 style="margin-bottom: 10px;">Favoriten</h2>
                 <div id="favoritenTable">Lade Daten...</div>
             </section>
@@ -180,6 +211,26 @@
 
         function showUserManageAlert(message, type = 'error') {
             document.getElementById('userManageAlert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
+        }
+
+        function showTaskManageAlert(message, type = 'error') {
+            document.getElementById('taskManageAlert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
+        }
+
+        function populateTaskAssigneeOptions(users) {
+            const select = document.getElementById('taskUserId');
+            const bewerber = users.filter((user) => user.user_typ === 'bewerber');
+            if (!bewerber.length) {
+                select.innerHTML = '<option value="">Keine Bewerber verfügbar</option>';
+                select.disabled = true;
+                return;
+            }
+
+            select.disabled = false;
+            select.innerHTML = bewerber.map((user) => {
+                const fullName = `${user.vorname || ''} ${user.nachname || ''}`.trim();
+                return `<option value="${user.id}">${escapeHtml(fullName || user.email)} (${escapeHtml(user.email)})</option>`;
+            }).join('');
         }
 
         function renderUsers(users) {
@@ -366,12 +417,43 @@
             `;
         }
 
+        function renderTasks(tasks) {
+            if (!tasks.length) return '<p>Keine Aufgaben vorhanden.</p>';
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Bewerber</th>
+                            <th>Titel</th>
+                            <th>Status</th>
+                            <th>Fällig</th>
+                            <th>Erstellt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tasks.map((task) => `
+                            <tr>
+                                <td>${task.id}</td>
+                                <td>${escapeHtml(`${task.user_vorname || ''} ${task.user_nachname || ''}`.trim() || task.user_email || '—')}</td>
+                                <td>${escapeHtml(task.titel || '—')}</td>
+                                <td><span class="badge ${task.status === 'erledigt' ? 'success' : 'warning'}">${escapeHtml(task.status || 'offen')}</span></td>
+                                <td>${formatDate(task.faellig_am)}</td>
+                                <td>${formatDate(task.erstellt_am)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
         async function loadAdminData() {
-            const [overview, usersRes, jobsRes, bewerbungenRes, favoritenRes] = await Promise.all([
+            const [overview, usersRes, jobsRes, bewerbungenRes, tasksRes, favoritenRes] = await Promise.all([
                 api('/api/admin/overview'),
                 api('/api/admin/users'),
                 api('/api/admin/jobs'),
                 api('/api/admin/bewerbungen'),
+                api('/api/admin/tasks'),
                 api('/api/admin/favoriten')
             ]);
 
@@ -383,7 +465,9 @@
             document.getElementById('usersTable').innerHTML = renderUsers(usersRes.users);
             document.getElementById('jobsTable').innerHTML = renderJobs(jobsRes.jobs);
             document.getElementById('bewerbungenTable').innerHTML = renderBewerbungen(bewerbungenRes.bewerbungen);
+            document.getElementById('tasksTable').innerHTML = renderTasks(tasksRes.tasks);
             document.getElementById('favoritenTable').innerHTML = renderFavoriten(favoritenRes.favoriten);
+            populateTaskAssigneeOptions(usersRes.users);
         }
 
         async function ensureAdmin() {
@@ -466,6 +550,31 @@
                 await loadAdminData();
             } catch (error) {
                 showUserManageAlert(error.message || 'Fehler beim Hinzufügen des Benutzers.');
+            }
+        });
+
+        document.getElementById('assignTaskForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const payload = {
+                userId: Number(document.getElementById('taskUserId').value),
+                titel: document.getElementById('taskTitel').value.trim(),
+                beschreibung: document.getElementById('taskBeschreibung').value.trim() || null,
+                faelligAm: document.getElementById('taskFaelligAm').value || null
+            };
+
+            try {
+                await api('/api/admin/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                showTaskManageAlert('Aufgabe erfolgreich zugeteilt.', 'success');
+                document.getElementById('assignTaskForm').reset();
+                await loadAdminData();
+            } catch (error) {
+                showTaskManageAlert(error.message || 'Fehler beim Zuteilen der Aufgabe.');
             }
         });
 

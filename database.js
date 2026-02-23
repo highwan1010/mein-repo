@@ -22,12 +22,14 @@ const defaultStore = () => ({
         users: 0,
         jobs: 0,
         bewerbungen: 0,
-        favoriten: 0
+        favoriten: 0,
+        tasks: 0
     },
     users: [],
     jobs: [],
     bewerbungen: [],
-    favoriten: []
+    favoriten: [],
+    tasks: []
 });
 
 const nowIso = () => new Date().toISOString();
@@ -70,6 +72,17 @@ const mapJob = (row) => row ? {
     branche: row.branche,
     erfahrung: row.erfahrung,
     status: row.status,
+    erstellt_am: row.erstellt_am
+} : null;
+
+const mapTask = (row) => row ? {
+    id: row.id,
+    user_id: row.user_id,
+    admin_id: row.admin_id,
+    titel: row.titel,
+    beschreibung: row.beschreibung,
+    status: row.status,
+    faellig_am: row.faellig_am,
     erstellt_am: row.erstellt_am
 } : null;
 
@@ -127,6 +140,17 @@ const initPostgres = async () => {
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE (user_id, job_id)
         );
+
+        CREATE TABLE IF NOT EXISTS tasks (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            titel TEXT NOT NULL,
+            beschreibung TEXT,
+            status TEXT NOT NULL DEFAULT 'offen',
+            faellig_am TIMESTAMPTZ,
+            erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
     `);
 
     console.log('✅ Postgres-Datenbank initialisiert');
@@ -145,10 +169,42 @@ const initFileDatabase = () => {
     console.log(`✅ Datei-Datenbank initialisiert (${DB_PATH})`);
 };
 
+const ensureFileStoreShape = (data) => {
+    const nextData = data && typeof data === 'object' ? data : defaultStore();
+
+    if (!nextData.counters || typeof nextData.counters !== 'object') {
+        nextData.counters = defaultStore().counters;
+    }
+
+    for (const key of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks']) {
+        if (!Array.isArray(nextData[key])) {
+            nextData[key] = [];
+        }
+    }
+
+    for (const counterKey of ['users', 'jobs', 'bewerbungen', 'favoriten', 'tasks']) {
+        if (!Number.isFinite(nextData.counters[counterKey])) {
+            nextData.counters[counterKey] = nextData[counterKey].reduce((maxId, item) => {
+                const value = Number(item && item.id);
+                return Number.isFinite(value) && value > maxId ? value : maxId;
+            }, 0);
+        }
+    }
+
+    return nextData;
+};
+
 const readDb = () => {
     initFileDatabase();
     const raw = fs.readFileSync(DB_PATH, 'utf8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const normalized = ensureFileStoreShape(parsed);
+
+    if (JSON.stringify(parsed) !== JSON.stringify(normalized)) {
+        writeDb(normalized);
+    }
+
+    return normalized;
 };
 
 const writeDb = (data) => {
@@ -795,6 +851,124 @@ const deleteBewerbungByAdmin = async (bewerbungId) => {
     return true;
 };
 
+const createTaskByAdmin = async (adminId, userId, data) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `INSERT INTO tasks (user_id, admin_id, titel, beschreibung, status, faellig_am)
+             VALUES ($1, $2, $3, $4, 'offen', $5)
+             RETURNING *`,
+            [
+                Number(userId),
+                Number(adminId),
+                data.titel,
+                data.beschreibung || null,
+                data.faelligAm || null
+            ]
+        );
+
+        return mapTask(result.rows[0]);
+    }
+
+    const db = readDb();
+    const id = nextId(db, 'tasks');
+    const task = {
+        id,
+        user_id: Number(userId),
+        admin_id: Number(adminId),
+        titel: data.titel,
+        beschreibung: data.beschreibung || null,
+        status: 'offen',
+        faellig_am: data.faelligAm || null,
+        erstellt_am: nowIso()
+    };
+
+    db.tasks.push(task);
+    writeDb(db);
+    return task;
+};
+
+const getTasksByUser = async (userId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT t.*, a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
+             FROM tasks t
+             LEFT JOIN users a ON a.id = t.admin_id
+             WHERE t.user_id = $1
+             ORDER BY t.erstellt_am DESC`,
+            [Number(userId)]
+        );
+        return result.rows;
+    }
+
+    const db = readDb();
+    return (db.tasks || [])
+        .filter((task) => Number(task.user_id) === Number(userId))
+        .map((task) => {
+            const admin = db.users.find((entry) => Number(entry.id) === Number(task.admin_id)) || {};
+            return {
+                ...task,
+                admin_vorname: admin.vorname || null,
+                admin_nachname: admin.nachname || null,
+                admin_email: admin.email || null
+            };
+        })
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const getAllTasksAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT t.*, u.vorname AS user_vorname, u.nachname AS user_nachname, u.email AS user_email,
+                    a.vorname AS admin_vorname, a.nachname AS admin_nachname, a.email AS admin_email
+             FROM tasks t
+             LEFT JOIN users u ON u.id = t.user_id
+             LEFT JOIN users a ON a.id = t.admin_id
+             ORDER BY t.erstellt_am DESC`
+        );
+        return result.rows;
+    }
+
+    const db = readDb();
+    return (db.tasks || [])
+        .map((task) => {
+            const user = db.users.find((entry) => Number(entry.id) === Number(task.user_id)) || {};
+            const admin = db.users.find((entry) => Number(entry.id) === Number(task.admin_id)) || {};
+            return {
+                ...task,
+                user_vorname: user.vorname || null,
+                user_nachname: user.nachname || null,
+                user_email: user.email || null,
+                admin_vorname: admin.vorname || null,
+                admin_nachname: admin.nachname || null,
+                admin_email: admin.email || null
+            };
+        })
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const updateTaskStatusForUser = async (taskId, userId, status) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `UPDATE tasks
+             SET status = $1
+             WHERE id = $2 AND user_id = $3
+             RETURNING *`,
+            [status, Number(taskId), Number(userId)]
+        );
+        return mapTask(result.rows[0]) || null;
+    }
+
+    const db = readDb();
+    const index = (db.tasks || []).findIndex(
+        (task) => Number(task.id) === Number(taskId) && Number(task.user_id) === Number(userId)
+    );
+    if (index === -1) return null;
+
+    db.tasks[index].status = status;
+    writeDb(db);
+    return db.tasks[index];
+};
+
 const addFavorit = async (userId, jobId) => {
     if (USE_POSTGRES) {
         try {
@@ -1069,6 +1243,10 @@ module.exports = {
     isFavorit,
     getAllUsersAdmin,
     deleteUserByAdmin,
+    createTaskByAdmin,
+    getTasksByUser,
+    getAllTasksAdmin,
+    updateTaskStatusForUser,
     getAllJobsAdmin,
     getAllBewerbungenAdmin,
     getAllFavoritenAdmin,

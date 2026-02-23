@@ -36,6 +36,10 @@ const {
     isFavorit,
     getAllUsersAdmin,
     deleteUserByAdmin,
+    createTaskByAdmin,
+    getTasksByUser,
+    getAllTasksAdmin,
+    updateTaskStatusForUser,
     getAllJobsAdmin,
     getAllBewerbungenAdmin,
     getAllFavoritenAdmin,
@@ -677,6 +681,36 @@ app.get('/api/favoriten', requireAuth, async (req, res) => {
     }
 });
 
+// ===== AUFGABEN ROUTES =====
+
+app.get('/api/tasks', requireAuth, async (req, res) => {
+    try {
+        const tasks = await getTasksByUser(req.authUserId);
+        res.json({ success: true, tasks });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Aufgaben' });
+    }
+});
+
+app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
+    try {
+        const { status } = req.body || {};
+        const allowedStatus = ['offen', 'erledigt'];
+        if (!allowedStatus.includes(status)) {
+            return res.status(400).json({ error: 'Ungültiger Aufgaben-Status' });
+        }
+
+        const updatedTask = await updateTaskStatusForUser(req.params.id, req.authUserId, status);
+        if (!updatedTask) {
+            return res.status(404).json({ error: 'Aufgabe nicht gefunden' });
+        }
+
+        res.json({ success: true, task: updatedTask });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Aktualisieren der Aufgabe' });
+    }
+});
+
 // ===== STATISTIKEN =====
 
 app.get('/api/stats', async (req, res) => {
@@ -865,6 +899,44 @@ app.get('/api/admin/favoriten', requireAdmin, async (req, res) => {
         res.json({ success: true, favoriten });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Favoriten' });
+    }
+});
+
+app.get('/api/admin/tasks', requireAdmin, async (req, res) => {
+    try {
+        const tasks = await getAllTasksAdmin();
+        res.json({ success: true, tasks });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Aufgaben' });
+    }
+});
+
+app.post('/api/admin/tasks', requireAdmin, async (req, res) => {
+    try {
+        const { userId, titel, beschreibung, faelligAm } = req.body || {};
+
+        if (!userId || !titel) {
+            return res.status(400).json({ error: 'Benutzer und Titel sind erforderlich' });
+        }
+
+        const targetUser = await findUserById(userId);
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
+
+        if (targetUser.user_typ === 'admin') {
+            return res.status(400).json({ error: 'Aufgaben können nur an Bewerber zugeteilt werden' });
+        }
+
+        const task = await createTaskByAdmin(req.currentAdmin.id, userId, {
+            titel: String(titel).trim(),
+            beschreibung: beschreibung ? String(beschreibung).trim() : '',
+            faelligAm: faelligAm || null
+        });
+
+        res.json({ success: true, task });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Erstellen der Aufgabe' });
     }
 });
 
