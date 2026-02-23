@@ -79,6 +79,45 @@
 
             <section class="card">
                 <h2 style="margin-bottom: 10px;">Benutzer</h2>
+                <div id="userManageAlert"></div>
+                <form id="createUserForm" style="margin-bottom: 16px;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="newUserVorname">Vorname</label>
+                            <input class="form-input" id="newUserVorname" type="text" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserNachname">Nachname</label>
+                            <input class="form-input" id="newUserNachname" type="text" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="newUserEmail">E-Mail</label>
+                            <input class="form-input" id="newUserEmail" type="email" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserPasswort">Passwort</label>
+                            <input class="form-input" id="newUserPasswort" type="password" minlength="6" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="newUserTyp">Typ</label>
+                            <select class="form-input" id="newUserTyp">
+                                <option value="bewerber">Bewerber</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserFirma">Firma (optional)</label>
+                            <input class="form-input" id="newUserFirma" type="text" />
+                        </div>
+                    </div>
+                    <button class="btn-primary" type="submit">
+                        <i class="fas fa-user-plus"></i> Benutzer hinzufügen
+                    </button>
+                </form>
                 <div id="usersTable">Lade Daten...</div>
             </section>
 
@@ -139,6 +178,10 @@
             document.getElementById('jobCreateAlert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
         }
 
+        function showUserManageAlert(message, type = 'error') {
+            document.getElementById('userManageAlert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
+        }
+
         function renderUsers(users) {
             if (!users.length) return '<p>Keine Benutzer vorhanden.</p>';
             return `
@@ -166,6 +209,9 @@
                                 <td>
                                     <button class="btn-secondary" onclick="editUser(${user.id}, '${escapeForJsString(user.vorname)}', '${escapeForJsString(user.nachname)}', '${escapeForJsString(user.email)}', '${escapeForJsString(user.user_typ)}', '${escapeForJsString(user.firma || '')}')">
                                         Bearbeiten
+                                    </button>
+                                    <button class="btn-danger" style="margin-left:8px;" onclick="deleteUser(${user.id}, '${escapeForJsString(user.email)}')">
+                                        Löschen
                                     </button>
                                 </td>
                             </tr>
@@ -214,6 +260,19 @@
                 alert('Benutzer erfolgreich aktualisiert.');
             } catch (error) {
                 alert(error.message || 'Fehler beim Aktualisieren des Benutzers.');
+            }
+        }
+
+        async function deleteUser(id, email) {
+            const confirmed = confirm(`Benutzer ${email} wirklich löschen?`);
+            if (!confirmed) return;
+
+            try {
+                await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+                showUserManageAlert('Benutzer erfolgreich gelöscht.', 'success');
+                await loadAdminData();
+            } catch (error) {
+                showUserManageAlert(error.message || 'Fehler beim Löschen des Benutzers.');
             }
         }
 
@@ -380,6 +439,33 @@
                 await loadAdminData();
             } catch (error) {
                 showJobCreateAlert(error.message || 'Fehler beim Erstellen der Arbeitsstelle.');
+            }
+        });
+
+        document.getElementById('createUserForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const payload = {
+                vorname: document.getElementById('newUserVorname').value.trim(),
+                nachname: document.getElementById('newUserNachname').value.trim(),
+                email: document.getElementById('newUserEmail').value.trim(),
+                passwort: document.getElementById('newUserPasswort').value,
+                userTyp: document.getElementById('newUserTyp').value,
+                firma: document.getElementById('newUserFirma').value.trim() || null
+            };
+
+            try {
+                await api('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                showUserManageAlert('Benutzer erfolgreich hinzugefügt.', 'success');
+                document.getElementById('createUserForm').reset();
+                await loadAdminData();
+            } catch (error) {
+                showUserManageAlert(error.message || 'Fehler beim Hinzufügen des Benutzers.');
             }
         });
 

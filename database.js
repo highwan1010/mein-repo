@@ -748,6 +748,53 @@ const updateBewerbungStatus = async (bewerbungId, status) => {
     return db.bewerbungen[index];
 };
 
+const updateBewerbungByAdmin = async (bewerbungId, data) => {
+    if (USE_POSTGRES) {
+        const existing = await getBewerbungById(bewerbungId);
+        if (!existing) return null;
+
+        const result = await pgPool.query(
+            `UPDATE bewerbungen
+             SET anschreiben = $1,
+                 status = $2
+             WHERE id = $3
+             RETURNING *`,
+            [
+                data.anschreiben ?? existing.anschreiben,
+                data.status ?? existing.status,
+                Number(bewerbungId)
+            ]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    const db = readDb();
+    const index = db.bewerbungen.findIndex((bewerbung) => bewerbung.id === Number(bewerbungId));
+    if (index === -1) return null;
+
+    db.bewerbungen[index] = {
+        ...db.bewerbungen[index],
+        anschreiben: data.anschreiben ?? db.bewerbungen[index].anschreiben,
+        status: data.status ?? db.bewerbungen[index].status
+    };
+
+    writeDb(db);
+    return db.bewerbungen[index];
+};
+
+const deleteBewerbungByAdmin = async (bewerbungId) => {
+    if (USE_POSTGRES) {
+        await pgPool.query('DELETE FROM bewerbungen WHERE id = $1', [Number(bewerbungId)]);
+        return true;
+    }
+
+    const db = readDb();
+    db.bewerbungen = db.bewerbungen.filter((bewerbung) => bewerbung.id !== Number(bewerbungId));
+    writeDb(db);
+    return true;
+};
+
 const addFavorit = async (userId, jobId) => {
     if (USE_POSTGRES) {
         try {
@@ -849,6 +896,33 @@ const getAllUsersAdmin = async () => {
 
     const db = readDb();
     return [...db.users].sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const deleteUserByAdmin = async (userId) => {
+    const targetId = Number(userId);
+
+    if (USE_POSTGRES) {
+        await pgPool.query('DELETE FROM users WHERE id = $1', [targetId]);
+        return true;
+    }
+
+    const db = readDb();
+    db.users = db.users.filter((user) => user.id !== targetId);
+
+    const jobIdsByUser = db.jobs
+        .filter((job) => Number(job.arbeitgeber_id) === targetId)
+        .map((job) => Number(job.id));
+
+    db.jobs = db.jobs.filter((job) => Number(job.arbeitgeber_id) !== targetId);
+    db.bewerbungen = db.bewerbungen.filter(
+        (bewerbung) => Number(bewerbung.bewerber_id) !== targetId && !jobIdsByUser.includes(Number(bewerbung.job_id))
+    );
+    db.favoriten = db.favoriten.filter(
+        (favorit) => Number(favorit.user_id) !== targetId && !jobIdsByUser.includes(Number(favorit.job_id))
+    );
+
+    writeDb(db);
+    return true;
 };
 
 const getAllJobsAdmin = async () => {
@@ -987,11 +1061,14 @@ module.exports = {
     getBewerbungenByJob,
     getBewerbungById,
     updateBewerbungStatus,
+    updateBewerbungByAdmin,
+    deleteBewerbungByAdmin,
     addFavorit,
     removeFavorit,
     getFavoriten,
     isFavorit,
     getAllUsersAdmin,
+    deleteUserByAdmin,
     getAllJobsAdmin,
     getAllBewerbungenAdmin,
     getAllFavoritenAdmin,

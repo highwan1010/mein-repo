@@ -35,6 +35,7 @@ const {
     getFavoriten,
     isFavorit,
     getAllUsersAdmin,
+    deleteUserByAdmin,
     getAllJobsAdmin,
     getAllBewerbungenAdmin,
     getAllFavoritenAdmin,
@@ -730,6 +731,52 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
     }
 });
 
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+    try {
+        const { vorname, nachname, email, passwort, userTyp, firma } = req.body || {};
+
+        if (!vorname || !nachname || !email || !passwort) {
+            return res.status(400).json({ error: 'Vorname, Nachname, E-Mail und Passwort sind erforderlich' });
+        }
+
+        if (String(passwort).length < 6) {
+            return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+        }
+
+        const normalizedType = String(userTyp || 'bewerber').trim().toLowerCase();
+        const allowedTypes = ['bewerber', 'admin'];
+        if (!allowedTypes.includes(normalizedType)) {
+            return res.status(400).json({ error: 'Ungültiger Benutzer-Typ' });
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(String(email).trim())) {
+            return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+        }
+
+        if (await findUserByEmail(String(email).trim())) {
+            return res.status(400).json({ error: 'E-Mail bereits registriert' });
+        }
+
+        const hashedPassword = await bcrypt.hash(String(passwort), 10);
+        const userId = await createUser(
+            String(vorname).trim(),
+            String(nachname).trim(),
+            String(email).trim(),
+            hashedPassword,
+            normalizedType,
+            firma ? String(firma).trim() : null
+        );
+
+        const createdUser = await findUserById(userId);
+        const { passwort: _, ...userWithoutPassword } = createdUser;
+
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Erstellen des Benutzers' });
+    }
+});
+
 app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
     try {
         const targetUserId = Number(req.params.id);
@@ -768,6 +815,29 @@ app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
         res.json({ success: true, user: userWithoutPassword });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Fehler beim Aktualisieren des Benutzers' });
+    }
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+    try {
+        const targetUserId = Number(req.params.id);
+        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
+        }
+
+        if (req.currentAdmin && Number(req.currentAdmin.id) === targetUserId) {
+            return res.status(400).json({ error: 'Sie können sich nicht selbst löschen' });
+        }
+
+        const targetUser = await findUserById(targetUserId);
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
+
+        await deleteUserByAdmin(targetUserId);
+        res.json({ success: true, message: 'Benutzer gelöscht' });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Löschen des Benutzers' });
     }
 });
 
