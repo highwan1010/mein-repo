@@ -39,8 +39,11 @@
         </div>
     </div>
 
+    <script src="config.js"></script>
     <script>
-        const API_BASE = '';
+        const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
+            ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
+            : '';
 
         function showAlert(message, type = 'error') {
             document.getElementById('alert').innerHTML = `<div class="alert ${type}">${message}</div>`;

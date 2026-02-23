@@ -224,8 +224,11 @@
         </div>
     </footer>
 
+    <script src="config.js"></script>
     <script>
-        const API_BASE = '';
+        const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
+            ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
+            : '';
 
         // Statistiken laden
         async function loadStats() {

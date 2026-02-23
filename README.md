@@ -1,6 +1,6 @@
 # JobConnect - Moderne Jobvermittlungsplattform
 
-JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrierung und JSON-Datei-Datenbank.
+JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrierung und PostgreSQL-Backend für Produktion.
 
 ## Features
 
@@ -11,12 +11,12 @@ JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrie
 - Favoriten speichern
 - Arbeitgeber-Dashboard (Jobs verwalten)
 - Bewerber-Dashboard (Bewerbungen/Favoriten)
-- Datei-Datenbank (`jobportal.json`)
+- PostgreSQL in Produktion, Datei-Fallback nur lokal in Entwicklung
 
 ## Tech Stack
 
 - Node.js + Express
-- Datei-Storage über Node.js (`fs`)
+- PostgreSQL (`pg`) + lokaler Datei-Fallback für Dev
 - bcryptjs (Passwort-Hashing)
 - express-session
 - HTML/CSS/Vanilla JavaScript
@@ -90,41 +90,35 @@ Die Datenbank-Datei wird automatisch beim ersten Start erstellt.
 
 ## Vercel
 
-- Empfohlen für Produktion: Postgres anbinden (z. B. Vercel Postgres/Neon) und `POSTGRES_URL` oder `DATABASE_URL` als Environment Variable setzen.
-- Sobald `POSTGRES_URL` oder `DATABASE_URL` vorhanden ist, nutzt die App automatisch Postgres (inkl. Auto-Tabellenanlage beim Start).
-- Ohne Postgres-URL fällt die App auf Datei-Storage zurück. Auf Vercel wird dafür automatisch `os.tmpdir()` genutzt.
-- Optional kann ein eigener Dateipfad per `DB_PATH` gesetzt werden.
+- Vercel Postgres im Projekt unter **Storage → Postgres** erstellen.
+- API läuft serverless über `api/index.js` (Express-App aus `server.js`).
+- `vercel.json` routet `/api/*` auf die Serverless-Funktion.
 
-Zusätzliche ENV-Variablen für Online-Betrieb:
+Erforderliche ENV-Variablen für Online-Betrieb:
 
+- `POSTGRES_URL` (kommt automatisch von Vercel Postgres)
 - `SESSION_SECRET` (starkes, zufälliges Secret)
 - `NODE_ENV=production`
-- `PORT` wird vom Hosting gesetzt (wird automatisch genutzt)
+
+Wichtig:
+
+- In `production` startet die App absichtlich **nicht**, wenn keine `DATABASE_URL`/`POSTGRES_URL` gesetzt ist.
+- Damit ist eine externe Online-Datenbank verbindlich erzwungen.
 
 Hinweis zum Frontend:
 
 - Die Seiten nutzen online automatisch die aktuelle Domain (`window.location.origin`) für API-Calls.
 - Es gibt keinen lokalen `localhost`-Fallback mehr im Frontend.
 
-## Komplett online (ohne localhost)
+## Vercel Deploy (kurz)
 
-Empfohlene Kombination:
+1. Repo zu Vercel importieren.
+2. Vercel Postgres hinzufügen (Storage).
+3. ENV setzen: `SESSION_SECRET`, `NODE_ENV=production`.
+4. Deploy starten.
+5. App über die Vercel-Domain öffnen.
 
-- Backend Hosting: Render oder Railway (Node Web Service)
-- Datenbank: Neon Postgres oder Vercel Postgres
+Externe API-Domain festlegen:
 
-Schritte:
-
-1. PostgreSQL-Datenbank erstellen und `DATABASE_URL` kopieren.
-2. Backend als Web Service deployen (Build: `npm install`, Start: `node server.js`).
-3. Environment Variables setzen:
-	- `DATABASE_URL` (oder `POSTGRES_URL`)
-	- `SESSION_SECRET`
-	- `NODE_ENV=production`
-4. Nach Deploy deine Domain öffnen (z. B. `https://deine-app.onrender.com`).
-
-Wichtig:
-
-- Öffne die App nur über die Online-Domain, nicht als lokale HTML-Datei.
-- Dann läuft alles komplett online inkl. Datenbank und Sessions.
-- In `production` startet die App absichtlich **nicht**, wenn keine `DATABASE_URL`/`POSTGRES_URL` gesetzt ist.
+- In `config.js` den Wert `API_BASE_URL` setzen, z. B. `https://deine-backend-domain.com`.
+- Bei leerem Wert (`''`) nutzt das Frontend automatisch die aktuelle Domain (same-origin).

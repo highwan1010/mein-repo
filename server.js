@@ -40,9 +40,12 @@ if (isProduction) {
 }
 
 // Datenbank initialisieren
-initDatabase().catch((error) => {
+const dbInitPromise = initDatabase().catch((error) => {
     console.error('Datenbank-Initialisierung fehlgeschlagen:', error);
-    process.exit(1);
+    if (require.main === module) {
+        process.exit(1);
+    }
+    throw error;
 });
 
 // Middleware
@@ -62,6 +65,15 @@ app.use(session({
         secure: isProduction
     }
 }));
+
+app.use(async (req, res, next) => {
+    try {
+        await dbInitPromise;
+        next();
+    } catch (error) {
+        res.status(500).json({ error: 'Datenbank nicht initialisiert' });
+    }
+});
 
 // Auth Middleware
 const requireAuth = (req, res, next) => {
@@ -552,9 +564,9 @@ app.get('/api/admin/favoriten', requireAdmin, async (req, res) => {
     }
 });
 
-// Server starten
-app.listen(PORT, () => {
-    console.log(`
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`
 ╔═══════════════════════════════════════════════╗
 ║                                               ║
 ║     💼  Job-Portal Server                    ║
@@ -566,4 +578,7 @@ app.listen(PORT, () => {
 ║                                               ║
 ╚═══════════════════════════════════════════════╝
     `);
-});
+    });
+}
+
+module.exports = app;

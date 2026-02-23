@@ -37,10 +37,13 @@
         </div>
     </main>
 
+    <script src="config.js"></script>
     <script>
         let currentJob = null;
         let isAuthenticated = false;
-        const API_BASE = '';
+        const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
+            ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
+            : '';
 
         function escapeHtml(value) {
             return String(value ?? '')
