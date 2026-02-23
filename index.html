@@ -19,7 +19,6 @@
                 <ul class="nav-menu">
                     <li><a href="#home">Home</a></li>
                     <li><a href="#jobs">Jobs</a></li>
-                    <li><a href="#arbeitgeber">Für Arbeitgeber</a></li>
                     <li><a href="#kontakt">Kontakt</a></li>
                 </ul>
                 <div class="nav-buttons">
@@ -46,28 +45,6 @@
             <div class="hero-content">
                 <h1>Finden Sie Ihren <span class="highlight">Traumjob</span></h1>
                 <p class="hero-subtitle">Tausende Jobs von Top-Unternehmen warten auf Sie. Starten Sie Ihre Karriere noch heute!</p>
-                
-                <div class="search-box">
-                    <div class="search-input-wrapper">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="searchInput" placeholder="Job, Firma, Stichwort...">
-                    </div>
-                    <div class="search-input-wrapper">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <input type="text" id="locationInput" placeholder="Standort...">
-                    </div>
-                    <button class="btn-primary btn-large" onclick="searchJobs()">
-                        Jobs suchen
-                    </button>
-                </div>
-
-                <div class="quick-categories">
-                    <span>Beliebte Kategorien:</span>
-                    <a href="#" class="category-tag">IT & Software</a>
-                    <a href="#" class="category-tag">Marketing</a>
-                    <a href="#" class="category-tag">Vertrieb</a>
-                    <a href="#" class="category-tag">Finanzen</a>
-                </div>
             </div>
             
             <div class="hero-stats">
@@ -95,75 +72,9 @@
                 <p>Entdecken Sie die neuesten Stellenangebote von Top-Arbeitgebern</p>
             </div>
 
-            <div class="job-filters">
-                <select id="filterCategory" onchange="filterJobs()">
-                    <option value="">Alle Kategorien</option>
-                    <option value="IT & Software">IT & Software</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Vertrieb">Vertrieb</option>
-                    <option value="Finanzen">Finanzen</option>
-                    <option value="HR">Personal / HR</option>
-                    <option value="Engineering">Engineering</option>
-                </select>
-
-                <select id="filterJobTyp" onchange="filterJobs()">
-                    <option value="">Alle Beschäftigungsarten</option>
-                    <option value="Vollzeit">Vollzeit</option>
-                    <option value="Teilzeit">Teilzeit</option>
-                    <option value="Freelance">Freelance</option>
-                    <option value="Remote">Remote</option>
-                </select>
-            </div>
-
             <div class="jobs-grid" id="jobsGrid">
                 <!-- Jobs werden hier dynamisch geladen -->
                 <div class="loading">Lade Jobs...</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Arbeitgeber Section -->
-    <section class="arbeitgeber-section" id="arbeitgeber">
-        <div class="container">
-            <div class="arbeitgeber-content">
-                <div class="arbeitgeber-text">
-                    <h2>Für <span class="highlight">Arbeitgeber</span></h2>
-                    <p class="lead">Finden Sie die besten Talente für Ihr Unternehmen</p>
-                    
-                    <div class="feature-list">
-                        <div class="feature-item">
-                            <i class="fas fa-users"></i>
-                            <div>
-                                <h4>Zugang zu Top-Talenten</h4>
-                                <p>Erreichen Sie qualifizierte Kandidaten aus allen Branchen</p>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <i class="fas fa-chart-line"></i>
-                            <div>
-                                <h4>Einfaches Bewerbermanagement</h4>
-                                <p>Verwalten Sie alle Bewerbungen zentral an einem Ort</p>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <i class="fas fa-clock"></i>
-                            <div>
-                                <h4>Schnelle Besetzung</h4>
-                                <p>Reduzieren Sie Ihre Time-to-Hire deutlich</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button class="btn-primary btn-large" onclick="window.location.href='register.html?typ=arbeitgeber'">
-                        Als Arbeitgeber registrieren
-                    </button>
-                </div>
-                
-                <div class="arbeitgeber-image">
-                    <div class="image-placeholder">
-                        <i class="fas fa-building"></i>
-                    </div>
-                </div>
             </div>
         </div>
     </section>
@@ -199,14 +110,6 @@
                         <li><a href="register.html">Registrieren</a></li>
                         <li><a href="login.html">Login</a></li>
                         <li><a href="#">Karriere-Tipps</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h4>Für Arbeitgeber</h4>
-                    <ul>
-                        <li><a href="#">Jobs posten</a></li>
-                        <li><a href="#">Preise</a></li>
-                        <li><a href="#">Talent Search</a></li>
                     </ul>
                 </div>
                 <div class="footer-column">
@@ -247,13 +150,12 @@
         }
 
         // Jobs laden
-        async function loadJobs(filters = {}) {
+        async function loadJobs() {
             const grid = document.getElementById('jobsGrid');
             grid.innerHTML = '<div class="loading">Lade Jobs...</div>';
 
             try {
-                const params = new URLSearchParams(filters);
-                const response = await fetch(`${API_BASE}/api/jobs?${params}`);
+            const response = await fetch(`${API_BASE}/api/jobs`);
                 const data = await response.json();
 
                 if (data.success && data.jobs.length > 0) {
@@ -289,22 +191,6 @@
                 grid.innerHTML = '<div class="error">Fehler beim Laden der Jobs</div>';
                 console.error('Fehler:', error);
             }
-        }
-
-        // Filter
-        function filterJobs() {
-            const filters = {
-                kategorie: document.getElementById('filterCategory').value,
-                jobTyp: document.getElementById('filterJobTyp').value
-            };
-            loadJobs(filters);
-        }
-
-        // Suche
-        function searchJobs() {
-            const search = document.getElementById('searchInput').value;
-            const standort = document.getElementById('locationInput').value;
-            loadJobs({ search, standort });
         }
 
         async function updateNavForSession() {

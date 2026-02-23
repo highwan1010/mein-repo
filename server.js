@@ -250,6 +250,10 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Alle Felder sind erforderlich' });
         }
 
+        if (userTyp && userTyp !== 'bewerber') {
+            return res.status(400).json({ error: 'Arbeitgeber-Funktion ist deaktiviert' });
+        }
+
         if (passwort.length < 6) {
             return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
         }
@@ -264,7 +268,7 @@ app.post('/api/register', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(passwort, 10);
-        const userId = await createUser(vorname, nachname, email, hashedPassword, userTyp, firma);
+        const userId = await createUser(vorname, nachname, email, hashedPassword, 'bewerber', null);
 
         req.session.userId = userId;
         req.session.save(async (saveError) => {
@@ -425,17 +429,18 @@ app.get('/api/jobs/:id', async (req, res) => {
     }
 });
 
-// Job erstellen (nur Arbeitgeber)
+// Job erstellen (Arbeitgeber oder Admin)
 app.post('/api/jobs', requireAuth, async (req, res) => {
     try {
-        const user = await findUserById(req.session.userId);
+        const userId = req.authUserId;
+        const user = await findUserById(userId);
 
         if (!user) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
         
-        if (user.user_typ !== 'arbeitgeber') {
-            return res.status(403).json({ error: 'Nur Arbeitgeber können Jobs erstellen' });
+        if (user.user_typ !== 'arbeitgeber' && user.user_typ !== 'admin') {
+            return res.status(403).json({ error: 'Nur Arbeitgeber oder Admin können Jobs erstellen' });
         }
 
         const { titel, firma, standort, beschreibung } = req.body;
@@ -443,7 +448,7 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Titel, Firma, Standort und Beschreibung sind erforderlich' });
         }
 
-        const jobId = await createJob(req.session.userId, req.body);
+        const jobId = await createJob(userId, req.body);
         const job = await getJobById(jobId);
 
         res.json({ success: true, job });
@@ -455,7 +460,7 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
 // Jobs des aktuellen Arbeitgebers
 app.get('/api/my-jobs', requireAuth, async (req, res) => {
     try {
-        const jobs = await getJobsByArbeitgeber(req.session.userId);
+        const jobs = await getJobsByArbeitgeber(req.authUserId);
         res.json({ success: true, jobs });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen der Jobs' });

@@ -14,7 +14,7 @@
                 <i class="fas fa-briefcase"></i><span>JobConnect</span>
             </div>
             <h1>Konto erstellen</h1>
-            <p>Registrieren Sie sich als Bewerber oder Arbeitgeber</p>
+            <p>Registrieren Sie sich als Bewerber</p>
         </div>
 
         <div id="alert"></div>
@@ -45,7 +45,6 @@
                 <label for="userTyp">Konto-Typ</label>
                 <select class="form-input" id="userTyp" required>
                     <option value="bewerber">Bewerber</option>
-                    <option value="arbeitgeber">Arbeitgeber</option>
                 </select>
             </div>
 
@@ -75,19 +74,16 @@
         const firmaGroup = document.getElementById('firmaGroup');
         const firmaInput = document.getElementById('firma');
 
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('typ') === 'arbeitgeber') {
-            userTyp.value = 'arbeitgeber';
-        }
-
         function syncFirma() {
-            const isArbeitgeber = userTyp.value === 'arbeitgeber';
-            firmaGroup.style.display = isArbeitgeber ? 'block' : 'none';
-            firmaInput.required = isArbeitgeber;
+            firmaGroup.style.display = 'none';
+            firmaInput.required = false;
         }
 
         syncFirma();
-        userTyp.addEventListener('change', syncFirma);
+        userTyp.addEventListener('change', () => {
+            userTyp.value = 'bewerber';
+            syncFirma();
+        });
 
         function showAlert(message, type = 'error') {
             document.getElementById('alert').innerHTML = `<div class="alert ${type}">${message}</div>`;
@@ -101,8 +97,8 @@
                 nachname: document.getElementById('nachname').value.trim(),
                 email: document.getElementById('email').value.trim(),
                 passwort: document.getElementById('passwort').value,
-                userTyp: userTyp.value,
-                firma: firmaInput.value.trim() || null
+                userTyp: 'bewerber',
+                firma: null
             };
 
             try {
