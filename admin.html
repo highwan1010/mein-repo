@@ -147,13 +147,24 @@
                     </div>
                     <div class="form-grid-2">
                         <div class="form-group">
+                            <label for="taskStatus">Status</label>
+                            <select class="form-input" id="taskStatus" required>
+                                <option value="offen">Offen</option>
+                                <option value="in_bearbeitung">In Bearbeitung</option>
+                                <option value="erledigt">Erledigt</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label for="taskFaelligAm">Fällig am (optional)</label>
                             <input class="form-input" id="taskFaelligAm" type="date" />
                         </div>
+                    </div>
+                    <div class="form-grid-2">
                         <div class="form-group">
                             <label for="taskBeschreibung">Beschreibung (optional)</label>
                             <input class="form-input" id="taskBeschreibung" type="text" />
                         </div>
+                        <div></div>
                     </div>
                     <button class="btn-primary" type="submit">
                         <i class="fas fa-list-check"></i> Aufgabe zuweisen
@@ -277,6 +288,17 @@
             if (!value) return '—';
             const date = new Date(value);
             return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('de-DE');
+        }
+
+        function formatTaskStatus(status) {
+            const normalized = String(status || 'offen');
+            if (normalized === 'erledigt') {
+                return { label: 'Erledigt', className: 'success' };
+            }
+            if (normalized === 'in_bearbeitung') {
+                return { label: 'In Bearbeitung', className: 'warning' };
+            }
+            return { label: 'Offen', className: '' };
         }
 
         async function api(path, options = {}) {
@@ -587,16 +609,19 @@
                         </tr>
                     </thead>
                     <tbody>
-                        ${tasks.map((task) => `
+                        ${tasks.map((task) => {
+                            const taskStatus = formatTaskStatus(task.status);
+                            return `
                             <tr>
                                 <td>${task.id}</td>
                                 <td>${escapeHtml(`${task.user_vorname || ''} ${task.user_nachname || ''}`.trim() || task.user_email || '—')}</td>
                                 <td>${escapeHtml(task.titel || '—')}</td>
-                                <td><span class="badge ${task.status === 'erledigt' ? 'success' : 'warning'}">${escapeHtml(task.status || 'offen')}</span></td>
+                                <td><span class="badge ${taskStatus.className}">${taskStatus.label}</span></td>
                                 <td>${formatDate(task.faellig_am)}</td>
                                 <td>${formatDate(task.erstellt_am)}</td>
                             </tr>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </tbody>
                 </table>
             `;
@@ -721,6 +746,7 @@
             const payload = {
                 userId: Number(document.getElementById('taskUserId').value),
                 titel: document.getElementById('taskTitel').value.trim(),
+                status: document.getElementById('taskStatus').value,
                 beschreibung: document.getElementById('taskBeschreibung').value.trim() || null,
                 faelligAm: document.getElementById('taskFaelligAm').value || null
             };
