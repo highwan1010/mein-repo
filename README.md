@@ -1,6 +1,6 @@
 # JobConnect - Moderne Jobvermittlungsplattform
 
-JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrierung und SQLite-Datenbank.
+JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrierung und JSON-Datei-Datenbank.
 
 ## Features
 
@@ -11,12 +11,12 @@ JobConnect ist eine moderne Webplattform zur Jobvermittlung mit Login, Registrie
 - Favoriten speichern
 - Arbeitgeber-Dashboard (Jobs verwalten)
 - Bewerber-Dashboard (Bewerbungen/Favoriten)
-- SQLite Datenbank mit strukturiertem Schema
+- Datei-Datenbank (`jobportal.json`)
 
 ## Tech Stack
 
 - Node.js + Express
-- better-sqlite3 (SQLite)
+- Datei-Storage über Node.js (`fs`)
 - bcryptjs (Passwort-Hashing)
 - express-session
 - HTML/CSS/Vanilla JavaScript
@@ -67,3 +67,10 @@ http://localhost:3000
 ## Hinweis
 
 Die Datenbank-Datei wird automatisch beim ersten Start erstellt.
+
+## Vercel
+
+- Empfohlen für Produktion: Postgres anbinden (z. B. Vercel Postgres/Neon) und `POSTGRES_URL` oder `DATABASE_URL` als Environment Variable setzen.
+- Sobald `POSTGRES_URL` oder `DATABASE_URL` vorhanden ist, nutzt die App automatisch Postgres (inkl. Auto-Tabellenanlage beim Start).
+- Ohne Postgres-URL fällt die App auf Datei-Storage zurück. Auf Vercel wird dafür automatisch `os.tmpdir()` genutzt.
+- Optional kann ein eigener Dateipfad per `DB_PATH` gesetzt werden.

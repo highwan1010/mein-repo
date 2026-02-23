@@ -66,12 +66,15 @@
     </div>
 
     <script>
-        if (window.location.protocol === 'file:') {
+        const APP_ORIGIN = 'http://localhost:3000';
+        const isAppHost = window.location.host === 'localhost:3000' || window.location.host === '127.0.0.1:3000';
+
+        if (!isAppHost) {
             const page = window.location.pathname.split('/').pop() || 'register.html';
-            window.location.replace(`http://localhost:3000/${page}${window.location.search}${window.location.hash}`);
+            window.location.replace(`${APP_ORIGIN}/${page}${window.location.search}${window.location.hash}`);
         }
 
-        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+        const API_BASE = isAppHost ? '' : APP_ORIGIN;
 
         const userTyp = document.getElementById('userTyp');
         const firmaGroup = document.getElementById('firmaGroup');

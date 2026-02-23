@@ -30,7 +30,10 @@ const app = express();
 const PORT = 3000;
 
 // Datenbank initialisieren
-initDatabase();
+initDatabase().catch((error) => {
+    console.error('Datenbank-Initialisierung fehlgeschlagen:', error);
+    process.exit(1);
+});
 
 // Middleware
 app.use(express.json());
@@ -77,15 +80,15 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
         }
 
-        if (findUserByEmail(email)) {
+        if (await findUserByEmail(email)) {
             return res.status(400).json({ error: 'E-Mail bereits registriert' });
         }
 
         const hashedPassword = await bcrypt.hash(passwort, 10);
-        const userId = createUser(vorname, nachname, email, hashedPassword, userTyp, firma);
+        const userId = await createUser(vorname, nachname, email, hashedPassword, userTyp, firma);
 
         req.session.userId = userId;
-        const newUser = findUserById(userId);
+        const newUser = await findUserById(userId);
 
         res.json({ 
             success: true, 
@@ -114,7 +117,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Email und Passwort erforderlich' });
         }
 
-        const user = findUserByEmail(email);
+        const user = await findUserByEmail(email);
         if (!user) {
             return res.status(401).json({ error: 'Ungültige Email oder Passwort' });
         }
@@ -155,14 +158,18 @@ app.post('/api/logout', (req, res) => {
 });
 
 // User Info
-app.get('/api/user', requireAuth, (req, res) => {
-    const user = findUserById(req.session.userId);
-    if (!user) {
-        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-    }
+app.get('/api/user', requireAuth, async (req, res) => {
+    try {
+        const user = await findUserById(req.session.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        }
 
-    const { passwort, ...userWithoutPassword } = user;
-    res.json(userWithoutPassword);
+        const { passwort, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Abrufen des Benutzers' });
+    }
 });
 
 // Session Check
@@ -176,7 +183,7 @@ app.get('/api/check-session', (req, res) => {
 // ===== JOB ROUTES =====
 
 // Alle Jobs abrufen
-app.get('/api/jobs', (req, res) => {
+app.get('/api/jobs', async (req, res) => {
     try {
         const filters = {
             standort: req.query.standort,
@@ -185,7 +192,7 @@ app.get('/api/jobs', (req, res) => {
             search: req.query.search
         };
 
-        const jobs = getAllJobs(filters);
+        const jobs = await getAllJobs(filters);
         res.json({ success: true, jobs });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen der Jobs' });
@@ -193,9 +200,9 @@ app.get('/api/jobs', (req, res) => {
 });
 
 // Einzelnen Job abrufen
-app.get('/api/jobs/:id', (req, res) => {
+app.get('/api/jobs/:id', async (req, res) => {
     try {
-        const job = getJobById(req.params.id);
+        const job = await getJobById(req.params.id);
         if (!job) {
             return res.status(404).json({ error: 'Job nicht gefunden' });
         }
@@ -206,16 +213,16 @@ app.get('/api/jobs/:id', (req, res) => {
 });
 
 // Job erstellen (nur Arbeitgeber)
-app.post('/api/jobs', requireAuth, (req, res) => {
+app.post('/api/jobs', requireAuth, async (req, res) => {
     try {
-        const user = findUserById(req.session.userId);
+        const user = await findUserById(req.session.userId);
         
         if (user.user_typ !== 'arbeitgeber') {
             return res.status(403).json({ error: 'Nur Arbeitgeber können Jobs erstellen' });
         }
 
-        const jobId = createJob(req.session.userId, req.body);
-        const job = getJobById(jobId);
+        const jobId = await createJob(req.session.userId, req.body);
+        const job = await getJobById(jobId);
 
         res.json({ success: true, job });
     } catch (error) {
@@ -224,9 +231,9 @@ app.post('/api/jobs', requireAuth, (req, res) => {
 });
 
 // Jobs des aktuellen Arbeitgebers
-app.get('/api/my-jobs', requireAuth, (req, res) => {
+app.get('/api/my-jobs', requireAuth, async (req, res) => {
     try {
-        const jobs = getJobsByArbeitgeber(req.session.userId);
+        const jobs = await getJobsByArbeitgeber(req.session.userId);
         res.json({ success: true, jobs });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen der Jobs' });
@@ -234,16 +241,16 @@ app.get('/api/my-jobs', requireAuth, (req, res) => {
 });
 
 // Job aktualisieren
-app.put('/api/jobs/:id', requireAuth, (req, res) => {
+app.put('/api/jobs/:id', requireAuth, async (req, res) => {
     try {
-        const job = getJobById(req.params.id);
+        const job = await getJobById(req.params.id);
         
         if (!job || job.arbeitgeber_id !== req.session.userId) {
             return res.status(403).json({ error: 'Keine Berechtigung' });
         }
 
-        updateJob(req.params.id, req.body);
-        const updatedJob = getJobById(req.params.id);
+        await updateJob(req.params.id, req.body);
+        const updatedJob = await getJobById(req.params.id);
 
         res.json({ success: true, job: updatedJob });
     } catch (error) {
@@ -252,15 +259,15 @@ app.put('/api/jobs/:id', requireAuth, (req, res) => {
 });
 
 // Job löschen
-app.delete('/api/jobs/:id', requireAuth, (req, res) => {
+app.delete('/api/jobs/:id', requireAuth, async (req, res) => {
     try {
-        const job = getJobById(req.params.id);
+        const job = await getJobById(req.params.id);
         
         if (!job || job.arbeitgeber_id !== req.session.userId) {
             return res.status(403).json({ error: 'Keine Berechtigung' });
         }
 
-        deleteJob(req.params.id);
+        await deleteJob(req.params.id);
         res.json({ success: true, message: 'Job gelöscht' });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Löschen' });
@@ -270,7 +277,7 @@ app.delete('/api/jobs/:id', requireAuth, (req, res) => {
 // ===== BEWERBUNGS ROUTES =====
 
 // Bewerbung einreichen
-app.post('/api/bewerbungen', requireAuth, (req, res) => {
+app.post('/api/bewerbungen', requireAuth, async (req, res) => {
     try {
         const { jobId, anschreiben } = req.body;
 
@@ -278,7 +285,7 @@ app.post('/api/bewerbungen', requireAuth, (req, res) => {
             return res.status(400).json({ error: 'Job-ID und Anschreiben erforderlich' });
         }
 
-        const bewerbungId = createBewerbung(jobId, req.session.userId, anschreiben);
+        const bewerbungId = await createBewerbung(jobId, req.session.userId, anschreiben);
 
         res.json({ 
             success: true, 
@@ -291,9 +298,9 @@ app.post('/api/bewerbungen', requireAuth, (req, res) => {
 });
 
 // Eigene Bewerbungen
-app.get('/api/my-bewerbungen', requireAuth, (req, res) => {
+app.get('/api/my-bewerbungen', requireAuth, async (req, res) => {
     try {
-        const bewerbungen = getBewerbungenByBewerber(req.session.userId);
+        const bewerbungen = await getBewerbungenByBewerber(req.session.userId);
         res.json({ success: true, bewerbungen });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen der Bewerbungen' });
@@ -301,15 +308,15 @@ app.get('/api/my-bewerbungen', requireAuth, (req, res) => {
 });
 
 // Bewerbungen für einen Job (nur Arbeitgeber)
-app.get('/api/jobs/:id/bewerbungen', requireAuth, (req, res) => {
+app.get('/api/jobs/:id/bewerbungen', requireAuth, async (req, res) => {
     try {
-        const job = getJobById(req.params.id);
+        const job = await getJobById(req.params.id);
         
         if (!job || job.arbeitgeber_id !== req.session.userId) {
             return res.status(403).json({ error: 'Keine Berechtigung' });
         }
 
-        const bewerbungen = getBewerbungenByJob(req.params.id);
+        const bewerbungen = await getBewerbungenByJob(req.params.id);
         res.json({ success: true, bewerbungen });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen' });
@@ -317,10 +324,10 @@ app.get('/api/jobs/:id/bewerbungen', requireAuth, (req, res) => {
 });
 
 // Bewerbungsstatus aktualisieren
-app.put('/api/bewerbungen/:id/status', requireAuth, (req, res) => {
+app.put('/api/bewerbungen/:id/status', requireAuth, async (req, res) => {
     try {
         const { status } = req.body;
-        updateBewerbungStatus(req.params.id, status);
+        await updateBewerbungStatus(req.params.id, status);
         res.json({ success: true, message: 'Status aktualisiert' });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Aktualisieren' });
@@ -330,10 +337,10 @@ app.put('/api/bewerbungen/:id/status', requireAuth, (req, res) => {
 // ===== FAVORITEN ROUTES =====
 
 // Favorit hinzufügen
-app.post('/api/favoriten', requireAuth, (req, res) => {
+app.post('/api/favoriten', requireAuth, async (req, res) => {
     try {
         const { jobId } = req.body;
-        addFavorit(req.session.userId, jobId);
+        await addFavorit(req.session.userId, jobId);
         res.json({ success: true, message: 'Als Favorit gespeichert' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -341,9 +348,9 @@ app.post('/api/favoriten', requireAuth, (req, res) => {
 });
 
 // Favorit entfernen
-app.delete('/api/favoriten/:jobId', requireAuth, (req, res) => {
+app.delete('/api/favoriten/:jobId', requireAuth, async (req, res) => {
     try {
-        removeFavorit(req.session.userId, req.params.jobId);
+        await removeFavorit(req.session.userId, req.params.jobId);
         res.json({ success: true, message: 'Favorit entfernt' });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Entfernen' });
@@ -351,9 +358,9 @@ app.delete('/api/favoriten/:jobId', requireAuth, (req, res) => {
 });
 
 // Favoriten abrufen
-app.get('/api/favoriten', requireAuth, (req, res) => {
+app.get('/api/favoriten', requireAuth, async (req, res) => {
     try {
-        const favoriten = getFavoriten(req.session.userId);
+        const favoriten = await getFavoriten(req.session.userId);
         res.json({ success: true, favoriten });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen' });
@@ -362,9 +369,9 @@ app.get('/api/favoriten', requireAuth, (req, res) => {
 
 // ===== STATISTIKEN =====
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
     try {
-        const stats = getStatistiken();
+        const stats = await getStatistiken();
         res.json({ success: true, stats });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen' });
