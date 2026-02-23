@@ -431,6 +431,7 @@
                 })
             });
             input.value = '';
+            await loadConversationHistory();
             await loadMessages();
         } catch (error) {
             alert(error.message || 'Nachricht konnte nicht gesendet werden.');
@@ -495,8 +496,7 @@
         const candidate = {
             vorname: String(vornameInput.value || '').trim(),
             nachname: String(nachnameInput.value || '').trim(),
-            email: String(emailInput.value || '').trim().toLowerCase(),
-            conversationId
+            email: String(emailInput.value || '').trim().toLowerCase()
         };
 
         if (!candidate.vorname || !candidate.nachname || !candidate.email) {

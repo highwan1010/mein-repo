@@ -349,12 +349,9 @@
                             <input class="form-input" id="taskFaelligAm" type="date" />
                         </div>
                     </div>
-                    <div class="form-grid-2">
-                        <div class="form-group">
-                            <label for="taskBeschreibung">Beschreibung (optional)</label>
-                            <input class="form-input" id="taskBeschreibung" type="text" />
-                        </div>
-                        <div></div>
+                    <div class="form-group">
+                        <label for="taskBeschreibung">Beschreibung / Planung (optional)</label>
+                        <textarea class="form-input" id="taskBeschreibung" rows="7" placeholder="Hier können Sie die Aufgabe ausführlich planen und beschreiben..."></textarea>
                     </div>
                     <button class="btn-primary" type="submit">
                         <i class="fas fa-list-check"></i> Aufgabe zuweisen
@@ -540,6 +537,18 @@
                 || message?.user_email
                 || 'Besucher'
             );
+        }
+
+        function syncAdminDisplayNameFromInput() {
+            const nameInput = document.getElementById('chatAdminDisplayName');
+            if (!nameInput) {
+                return adminChatDisplayName;
+            }
+
+            const typedName = String(nameInput.value || '').trim();
+            adminChatDisplayName = typedName;
+            localStorage.setItem(ADMIN_CHAT_NAME_STORAGE_KEY, adminChatDisplayName);
+            return adminChatDisplayName;
         }
 
         function formatConversationStatus(status) {
@@ -852,6 +861,7 @@
                             <th>ID</th>
                             <th>Bewerber</th>
                             <th>Titel</th>
+                            <th>Beschreibung</th>
                             <th>Status</th>
                             <th>Fällig</th>
                             <th>Erstellt</th>
@@ -865,6 +875,7 @@
                                 <td>${task.id}</td>
                                 <td>${escapeHtml(`${task.user_vorname || ''} ${task.user_nachname || ''}`.trim() || task.user_email || '—')}</td>
                                 <td>${escapeHtml(task.titel || '—')}</td>
+                                <td style="max-width: 340px; white-space: pre-wrap;">${escapeHtml(task.beschreibung || '—')}</td>
                                 <td><span class="badge ${taskStatus.className}">${taskStatus.label}</span></td>
                                 <td>${formatDate(task.faellig_am)}</td>
                                 <td>${formatDate(task.erstellt_am)}</td>
@@ -1067,12 +1078,13 @@
                     body: JSON.stringify({ nachricht: text })
                 });
             } else {
+                const currentAdminDisplayName = syncAdminDisplayNameFromInput();
                 await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/reply`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         nachricht: text,
-                        adminAnzeigename: adminChatDisplayName
+                        adminAnzeigename: currentAdminDisplayName
                     })
                 });
             }
@@ -1096,13 +1108,16 @@
 
             if (saveDisplayNameButton && nameInput) {
                 saveDisplayNameButton.addEventListener('click', () => {
-                    adminChatDisplayName = String(nameInput.value || '').trim();
-                    localStorage.setItem(ADMIN_CHAT_NAME_STORAGE_KEY, adminChatDisplayName);
+                    syncAdminDisplayNameFromInput();
                     const chatsTable = document.getElementById('chatsTable');
                     if (chatsTable) {
                         chatsTable.innerHTML = renderChats();
                         bindChatReplyForm();
                     }
+                });
+
+                nameInput.addEventListener('blur', () => {
+                    syncAdminDisplayNameFromInput();
                 });
             }
 
