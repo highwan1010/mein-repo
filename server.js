@@ -24,6 +24,10 @@ const {
     removeFavorit,
     getFavoriten,
     isFavorit,
+    getAllUsersAdmin,
+    getAllJobsAdmin,
+    getAllBewerbungenAdmin,
+    getAllFavoritenAdmin,
     getStatistiken
 } = require('./database');
 
@@ -58,6 +62,24 @@ const requireAuth = (req, res, next) => {
         next();
     } else {
         res.status(401).json({ error: 'Nicht autorisiert' });
+    }
+};
+
+const requireAdmin = async (req, res, next) => {
+    try {
+        if (!req.session.userId) {
+            return res.status(401).json({ error: 'Nicht autorisiert' });
+        }
+
+        const user = await findUserById(req.session.userId);
+        if (!user || user.user_typ !== 'admin') {
+            return res.status(403).json({ error: 'Admin-Berechtigung erforderlich' });
+        }
+
+        req.currentAdmin = user;
+        next();
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler bei der Admin-Authentifizierung' });
     }
 };
 
@@ -450,6 +472,76 @@ app.get('/api/stats', async (req, res) => {
         res.json({ success: true, stats });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Abrufen' });
+    }
+});
+
+// ===== ADMIN ROUTES =====
+
+app.get('/api/admin/overview', requireAdmin, async (req, res) => {
+    try {
+        const [stats, users, jobs, bewerbungen, favoriten] = await Promise.all([
+            getStatistiken(),
+            getAllUsersAdmin(),
+            getAllJobsAdmin(),
+            getAllBewerbungenAdmin(),
+            getAllFavoritenAdmin()
+        ]);
+
+        res.json({
+            success: true,
+            stats: {
+                ...stats,
+                totalFavoriten: favoriten.length,
+                totalAdmins: users.filter((user) => user.user_typ === 'admin').length
+            },
+            recent: {
+                users: users.slice(0, 5).map(({ passwort, ...userWithoutPassword }) => userWithoutPassword),
+                jobs: jobs.slice(0, 5),
+                bewerbungen: bewerbungen.slice(0, 5),
+                favoriten: favoriten.slice(0, 5)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Admin-Übersicht' });
+    }
+});
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    try {
+        const users = await getAllUsersAdmin();
+        res.json({
+            success: true,
+            users: users.map(({ passwort, ...userWithoutPassword }) => userWithoutPassword)
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
+    }
+});
+
+app.get('/api/admin/jobs', requireAdmin, async (req, res) => {
+    try {
+        const jobs = await getAllJobsAdmin();
+        res.json({ success: true, jobs });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Jobs' });
+    }
+});
+
+app.get('/api/admin/bewerbungen', requireAdmin, async (req, res) => {
+    try {
+        const bewerbungen = await getAllBewerbungenAdmin();
+        res.json({ success: true, bewerbungen });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Bewerbungen' });
+    }
+});
+
+app.get('/api/admin/favoriten', requireAdmin, async (req, res) => {
+    try {
+        const favoriten = await getAllFavoritenAdmin();
+        res.json({ success: true, favoriten });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der Favoriten' });
     }
 });
 

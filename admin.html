@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Panel - JobConnect</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo"><i class="fas fa-shield-alt"></i><span>JobConnect Admin</span></div>
+                <div class="nav-buttons">
+                    <button class="btn-secondary" onclick="window.location.href='index.html'">Startseite</button>
+                    <button class="btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
+                    <button class="btn-danger" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="dashboard">
+        <div class="container">
+            <div class="dashboard-top">
+                <div>
+                    <h1 id="welcome">Admin Panel</h1>
+                    <p id="subtitle" style="color: var(--gray);">Vollständige Systemeinsicht in Benutzer, Jobs, Bewerbungen und Favoriten.</p>
+                </div>
+                <button class="btn-primary" id="refreshBtn"><i class="fas fa-rotate"></i> Aktualisieren</button>
+            </div>
+
+            <div class="panel-grid">
+                <div class="panel"><div style="color: var(--gray);">Benutzer</div><div class="value" id="countUsers">0</div></div>
+                <div class="panel"><div style="color: var(--gray);">Jobs</div><div class="value" id="countJobs">0</div></div>
+                <div class="panel"><div style="color: var(--gray);">Bewerbungen</div><div class="value" id="countBewerbungen">0</div></div>
+                <div class="panel"><div style="color: var(--gray);">Favoriten</div><div class="value" id="countFavoriten">0</div></div>
+            </div>
+
+            <section class="card">
+                <h2 style="margin-bottom: 10px;">Benutzer</h2>
+                <div id="usersTable">Lade Daten...</div>
+            </section>
+
+            <section class="card">
+                <h2 style="margin-bottom: 10px;">Jobs</h2>
+                <div id="jobsTable">Lade Daten...</div>
+            </section>
+
+            <section class="card">
+                <h2 style="margin-bottom: 10px;">Bewerbungen</h2>
+                <div id="bewerbungenTable">Lade Daten...</div>
+            </section>
+
+            <section class="card">
+                <h2 style="margin-bottom: 10px;">Favoriten</h2>
+                <div id="favoritenTable">Lade Daten...</div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const APP_ORIGIN = 'http://localhost:3000';
+        const isAppHost = window.location.host === 'localhost:3000' || window.location.host === '127.0.0.1:3000';
+
+        if (!isAppHost) {
+            const page = window.location.pathname.split('/').pop() || 'admin.html';
+            window.location.replace(`${APP_ORIGIN}/${page}${window.location.search}${window.location.hash}`);
+        }
+
+        const API_BASE = isAppHost ? '' : APP_ORIGIN;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function formatDate(value) {
+            if (!value) return '—';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('de-DE');
+        }
+
+        async function api(path, options = {}) {
+            const response = await fetch(`${API_BASE}${path}`, options);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Fehler');
+            return data;
+        }
+
+        function renderUsers(users) {
+            if (!users.length) return '<p>Keine Benutzer vorhanden.</p>';
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>E-Mail</th>
+                            <th>Typ</th>
+                            <th>Firma</th>
+                            <th>Erstellt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${users.map((user) => `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td>${escapeHtml(`${user.vorname || ''} ${user.nachname || ''}`.trim())}</td>
+                                <td>${escapeHtml(user.email)}</td>
+                                <td><span class="badge">${escapeHtml(user.user_typ)}</span></td>
+                                <td>${escapeHtml(user.firma || '—')}</td>
+                                <td>${formatDate(user.erstellt_am)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderJobs(jobs) {
+            if (!jobs.length) return '<p>Keine Jobs vorhanden.</p>';
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Titel</th>
+                            <th>Firma</th>
+                            <th>Standort</th>
+                            <th>Status</th>
+                            <th>Arbeitgeber</th>
+                            <th>Erstellt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${jobs.map((job) => `
+                            <tr>
+                                <td>${job.id}</td>
+                                <td>${escapeHtml(job.titel)}</td>
+                                <td>${escapeHtml(job.firma)}</td>
+                                <td>${escapeHtml(job.standort)}</td>
+                                <td><span class="badge ${job.status === 'aktiv' ? 'success' : 'warning'}">${escapeHtml(job.status || '—')}</span></td>
+                                <td>${escapeHtml(`${job.arbeitgeber_vorname || ''} ${job.arbeitgeber_nachname || ''}`.trim() || job.arbeitgeber_email || '—')}</td>
+                                <td>${formatDate(job.erstellt_am)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderBewerbungen(bewerbungen) {
+            if (!bewerbungen.length) return '<p>Keine Bewerbungen vorhanden.</p>';
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Bewerber</th>
+                            <th>Job</th>
+                            <th>Firma</th>
+                            <th>Status</th>
+                            <th>Erstellt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bewerbungen.map((bewerbung) => `
+                            <tr>
+                                <td>${bewerbung.id}</td>
+                                <td>${escapeHtml(`${bewerbung.bewerber_vorname || ''} ${bewerbung.bewerber_nachname || ''}`.trim() || bewerbung.bewerber_email || '—')}</td>
+                                <td>${escapeHtml(bewerbung.job_titel || '—')}</td>
+                                <td>${escapeHtml(bewerbung.job_firma || '—')}</td>
+                                <td><span class="badge">${escapeHtml(bewerbung.status || '—')}</span></td>
+                                <td>${formatDate(bewerbung.erstellt_am)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderFavoriten(favoriten) {
+            if (!favoriten.length) return '<p>Keine Favoriten vorhanden.</p>';
+            return `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Benutzer</th>
+                            <th>Job</th>
+                            <th>Firma</th>
+                            <th>Gespeichert am</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${favoriten.map((favorit) => `
+                            <tr>
+                                <td>${favorit.id}</td>
+                                <td>${escapeHtml(`${favorit.user_vorname || ''} ${favorit.user_nachname || ''}`.trim() || favorit.user_email || '—')}</td>
+                                <td>${escapeHtml(favorit.job_titel || '—')}</td>
+                                <td>${escapeHtml(favorit.job_firma || '—')}</td>
+                                <td>${formatDate(favorit.erstellt_am || favorit.favorit_seit)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function loadAdminData() {
+            const [overview, usersRes, jobsRes, bewerbungenRes, favoritenRes] = await Promise.all([
+                api('/api/admin/overview'),
+                api('/api/admin/users'),
+                api('/api/admin/jobs'),
+                api('/api/admin/bewerbungen'),
+                api('/api/admin/favoriten')
+            ]);
+
+            document.getElementById('countUsers').textContent = overview.stats.totalUsers;
+            document.getElementById('countJobs').textContent = jobsRes.jobs.length;
+            document.getElementById('countBewerbungen').textContent = bewerbungenRes.bewerbungen.length;
+            document.getElementById('countFavoriten').textContent = favoritenRes.favoriten.length;
+
+            document.getElementById('usersTable').innerHTML = renderUsers(usersRes.users);
+            document.getElementById('jobsTable').innerHTML = renderJobs(jobsRes.jobs);
+            document.getElementById('bewerbungenTable').innerHTML = renderBewerbungen(bewerbungenRes.bewerbungen);
+            document.getElementById('favoritenTable').innerHTML = renderFavoriten(favoritenRes.favoriten);
+        }
+
+        async function ensureAdmin() {
+            const session = await api('/api/check-session');
+            if (!session.isAuthenticated) {
+                window.location.href = 'login.html';
+                return false;
+            }
+
+            const user = await api('/api/user');
+            if (user.user_typ !== 'admin') {
+                window.location.href = 'dashboard.html';
+                return false;
+            }
+
+            document.getElementById('welcome').textContent = `Admin Panel – ${user.vorname}`;
+            return true;
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', async () => {
+            try {
+                await loadAdminData();
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await api('/api/logout', { method: 'POST' });
+            window.location.href = 'index.html';
+        });
+
+        (async () => {
+            try {
+                const ok = await ensureAdmin();
+                if (!ok) return;
+                await loadAdminData();
+            } catch (error) {
+                alert(error.message);
+            }
+        })();
+    </script>
+</body>
+</html>

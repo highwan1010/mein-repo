@@ -66,6 +66,11 @@ http://localhost:3000
 - POST /api/favoriten
 - GET /api/favoriten
 - GET /api/favoriten/:jobId/status
+- GET /api/admin/overview (Admin)
+- GET /api/admin/users (Admin)
+- GET /api/admin/jobs (Admin)
+- GET /api/admin/bewerbungen (Admin)
+- GET /api/admin/favoriten (Admin)
 
 Bewerbungsstatus-Werte:
 
@@ -74,6 +79,10 @@ Bewerbungsstatus-Werte:
 - eingeladen
 - abgelehnt
 - angenommen
+
+Admin-Zugang:
+
+- Benutzer mit `user_typ = admin` erhalten Zugriff auf `admin.html` und die Admin-API.
 
 ## Hinweis
 

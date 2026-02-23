@@ -708,6 +708,111 @@ const isFavorit = async (userId, jobId) => {
     );
 };
 
+const getAllUsersAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query('SELECT * FROM users ORDER BY erstellt_am DESC');
+        return result.rows.map(mapUser);
+    }
+
+    const db = readDb();
+    return [...db.users].sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const getAllJobsAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT j.*, u.vorname AS arbeitgeber_vorname, u.nachname AS arbeitgeber_nachname, u.email AS arbeitgeber_email
+             FROM jobs j
+             LEFT JOIN users u ON u.id = j.arbeitgeber_id
+             ORDER BY j.erstellt_am DESC`
+        );
+        return result.rows;
+    }
+
+    const db = readDb();
+    return db.jobs
+        .map((job) => {
+            const arbeitgeber = db.users.find((entry) => entry.id === Number(job.arbeitgeber_id)) || {};
+            return {
+                ...job,
+                arbeitgeber_vorname: arbeitgeber.vorname || null,
+                arbeitgeber_nachname: arbeitgeber.nachname || null,
+                arbeitgeber_email: arbeitgeber.email || null
+            };
+        })
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const getAllBewerbungenAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT b.*, 
+                    u.vorname AS bewerber_vorname,
+                    u.nachname AS bewerber_nachname,
+                    u.email AS bewerber_email,
+                    j.titel AS job_titel,
+                    j.firma AS job_firma
+             FROM bewerbungen b
+             LEFT JOIN users u ON u.id = b.bewerber_id
+             LEFT JOIN jobs j ON j.id = b.job_id
+             ORDER BY b.erstellt_am DESC`
+        );
+        return result.rows;
+    }
+
+    const db = readDb();
+    return db.bewerbungen
+        .map((bewerbung) => {
+            const bewerber = db.users.find((entry) => entry.id === Number(bewerbung.bewerber_id)) || {};
+            const job = db.jobs.find((entry) => entry.id === Number(bewerbung.job_id)) || {};
+
+            return {
+                ...bewerbung,
+                bewerber_vorname: bewerber.vorname || null,
+                bewerber_nachname: bewerber.nachname || null,
+                bewerber_email: bewerber.email || null,
+                job_titel: job.titel || null,
+                job_firma: job.firma || null
+            };
+        })
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
+const getAllFavoritenAdmin = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT f.*, 
+                    u.vorname AS user_vorname,
+                    u.nachname AS user_nachname,
+                    u.email AS user_email,
+                    j.titel AS job_titel,
+                    j.firma AS job_firma
+             FROM favoriten f
+             LEFT JOIN users u ON u.id = f.user_id
+             LEFT JOIN jobs j ON j.id = f.job_id
+             ORDER BY f.erstellt_am DESC`
+        );
+        return result.rows;
+    }
+
+    const db = readDb();
+    return db.favoriten
+        .map((favorit) => {
+            const user = db.users.find((entry) => entry.id === Number(favorit.user_id)) || {};
+            const job = db.jobs.find((entry) => entry.id === Number(favorit.job_id)) || {};
+
+            return {
+                ...favorit,
+                user_vorname: user.vorname || null,
+                user_nachname: user.nachname || null,
+                user_email: user.email || null,
+                job_titel: job.titel || null,
+                job_firma: job.firma || null
+            };
+        })
+        .sort((left, right) => new Date(right.erstellt_am) - new Date(left.erstellt_am));
+};
+
 const getStatistiken = async () => {
     if (USE_POSTGRES) {
         const result = await pgPool.query(`
@@ -752,5 +857,9 @@ module.exports = {
     removeFavorit,
     getFavoriten,
     isFavorit,
+    getAllUsersAdmin,
+    getAllJobsAdmin,
+    getAllBewerbungenAdmin,
+    getAllFavoritenAdmin,
     getStatistiken
 };

@@ -121,13 +121,16 @@
     </main>
 
     <script>
-        if (window.location.protocol === 'file:') {
+        const APP_ORIGIN = 'http://localhost:3000';
+        const isAppHost = window.location.host === 'localhost:3000' || window.location.host === '127.0.0.1:3000';
+
+        if (!isAppHost) {
             const page = window.location.pathname.split('/').pop() || 'dashboard.html';
-            window.location.replace(`http://localhost:3000/${page}${window.location.search}${window.location.hash}`);
+            window.location.replace(`${APP_ORIGIN}/${page}${window.location.search}${window.location.hash}`);
         }
 
         let currentUser = null;
-        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+        const API_BASE = isAppHost ? '' : APP_ORIGIN;
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -152,6 +155,12 @@
                 return;
             }
             currentUser = await api('/api/user');
+
+            if (currentUser.user_typ === 'admin') {
+                window.location.href = 'admin.html';
+                return;
+            }
+
             document.getElementById('welcome').textContent = `Hallo, ${currentUser.vorname}!`;
             document.getElementById('subtitle').textContent = currentUser.user_typ === 'arbeitgeber'
                 ? 'Verwalten Sie Ihre Jobs und Bewerbungen.'
