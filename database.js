@@ -615,18 +615,20 @@ const updateJob = async (jobId, data) => {
         const result = await pgPool.query(
             `UPDATE jobs
              SET titel = $1,
-                 standort = $2,
-                 job_typ = $3,
-                 gehalt_von = $4,
-                 gehalt_bis = $5,
-                 beschreibung = $6,
-                 anforderungen = $7,
-                 benefits = $8,
-                 status = $9
-             WHERE id = $10
+                 firma = $2,
+                 standort = $3,
+                 job_typ = $4,
+                 gehalt_von = $5,
+                 gehalt_bis = $6,
+                 beschreibung = $7,
+                 anforderungen = $8,
+                 benefits = $9,
+                 status = $10
+             WHERE id = $11
              RETURNING *`,
             [
                 data.titel ?? existing.titel,
+                data.firma ?? existing.firma,
                 data.standort ?? existing.standort,
                 data.jobTyp ?? existing.job_typ,
                 data.gehaltVon ?? existing.gehalt_von,
@@ -649,6 +651,7 @@ const updateJob = async (jobId, data) => {
     db.jobs[index] = {
         ...db.jobs[index],
         titel: data.titel ?? db.jobs[index].titel,
+        firma: data.firma ?? db.jobs[index].firma,
         standort: data.standort ?? db.jobs[index].standort,
         job_typ: data.jobTyp ?? db.jobs[index].job_typ,
         gehalt_von: data.gehaltVon ?? db.jobs[index].gehalt_von,

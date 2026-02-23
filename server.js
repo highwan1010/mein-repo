@@ -884,6 +884,39 @@ app.get('/api/admin/jobs', requireAdmin, async (req, res) => {
     }
 });
 
+app.put('/api/admin/jobs/:id', requireAdmin, async (req, res) => {
+    try {
+        const jobId = Number(req.params.id);
+        if (!Number.isInteger(jobId) || jobId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Job-ID' });
+        }
+
+        const existingJob = await getJobById(jobId);
+        if (!existingJob) {
+            return res.status(404).json({ error: 'Job nicht gefunden' });
+        }
+
+        const payload = req.body || {};
+        const allowedStatus = ['aktiv', 'pausiert', 'geschlossen'];
+        if (payload.status && !allowedStatus.includes(payload.status)) {
+            return res.status(400).json({ error: 'Ungültiger Job-Status' });
+        }
+
+        const updatedJob = await updateJob(jobId, {
+            titel: payload.titel !== undefined ? String(payload.titel).trim() : undefined,
+            firma: payload.firma !== undefined ? String(payload.firma).trim() : undefined,
+            standort: payload.standort !== undefined ? String(payload.standort).trim() : undefined,
+            jobTyp: payload.jobTyp !== undefined ? String(payload.jobTyp).trim() : undefined,
+            beschreibung: payload.beschreibung !== undefined ? String(payload.beschreibung).trim() : undefined,
+            status: payload.status !== undefined ? String(payload.status).trim() : undefined
+        });
+
+        res.json({ success: true, job: updatedJob });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Aktualisieren des Jobs' });
+    }
+});
+
 app.get('/api/admin/bewerbungen', requireAdmin, async (req, res) => {
     try {
         const bewerbungen = await getAllBewerbungenAdmin();

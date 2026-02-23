@@ -340,6 +340,7 @@
                             <th>Status</th>
                             <th>Arbeitgeber</th>
                             <th>Erstellt</th>
+                            <th>Aktion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -352,11 +353,62 @@
                                 <td><span class="badge ${job.status === 'aktiv' ? 'success' : 'warning'}">${escapeHtml(job.status || '—')}</span></td>
                                 <td>${escapeHtml(`${job.arbeitgeber_vorname || ''} ${job.arbeitgeber_nachname || ''}`.trim() || job.arbeitgeber_email || '—')}</td>
                                 <td>${formatDate(job.erstellt_am)}</td>
+                                <td>
+                                    <button class="btn-secondary" onclick="editJob(${job.id}, '${escapeForJsString(job.titel)}', '${escapeForJsString(job.firma)}', '${escapeForJsString(job.standort)}', '${escapeForJsString(job.job_typ || '')}', '${escapeForJsString(job.status || 'aktiv')}', '${escapeForJsString(job.beschreibung || '')}')">
+                                        Bearbeiten
+                                    </button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
+        }
+
+        async function editJob(id, currentTitel, currentFirma, currentStandort, currentJobTyp, currentStatus, currentBeschreibung) {
+            const titel = prompt('Titel:', currentTitel);
+            if (titel === null) return;
+
+            const firma = prompt('Firma:', currentFirma);
+            if (firma === null) return;
+
+            const standort = prompt('Standort:', currentStandort);
+            if (standort === null) return;
+
+            const jobTyp = prompt('Beschäftigungsart:', currentJobTyp || 'Vollzeit');
+            if (jobTyp === null) return;
+
+            const status = prompt('Status (aktiv/pausiert/geschlossen):', currentStatus || 'aktiv');
+            if (status === null) return;
+
+            const normalizedStatus = String(status).trim().toLowerCase();
+            if (!['aktiv', 'pausiert', 'geschlossen'].includes(normalizedStatus)) {
+                alert('Ungültiger Status. Erlaubt: aktiv, pausiert, geschlossen');
+                return;
+            }
+
+            const beschreibung = prompt('Beschreibung:', currentBeschreibung || '');
+            if (beschreibung === null) return;
+
+            try {
+                await api(`/api/admin/jobs/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        titel: String(titel).trim(),
+                        firma: String(firma).trim(),
+                        standort: String(standort).trim(),
+                        jobTyp: String(jobTyp).trim(),
+                        status: normalizedStatus,
+                        beschreibung: String(beschreibung).trim()
+                    })
+                });
+
+                await loadAdminData();
+                showJobCreateAlert('Job erfolgreich aktualisiert.', 'success');
+            } catch (error) {
+                showJobCreateAlert(error.message || 'Fehler beim Aktualisieren des Jobs.');
+            }
         }
 
         function renderBewerbungen(bewerbungen) {
