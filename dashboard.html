@@ -122,8 +122,9 @@
                 <div id="mainTabPane">
                     <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
                     <div id="listContainer">Lade Daten...</div>
-                    <div id="bewerberCalendarSection" style="display:none; margin-top: 16px;">
-                        <h2 style="margin-bottom: 10px;">Bewerbungstermin buchen</h2>
+                    <div id="bewerberCalendarSection" style="display:none; margin-top: 16px;" data-section="bewerbungstermine">
+                        <h2 style="margin-bottom: 10px;">Bewerbungstermine</h2>
+                        <p style="color: var(--gray); margin-bottom: 10px;">Wählen Sie Datum und Uhrzeit für Ihr Bewerbungsgespräch.</p>
                         <div id="appointmentsAlert"></div>
                         <form id="appointmentForm" style="margin-bottom: 14px;">
                             <div class="form-grid-2">
@@ -510,6 +511,13 @@
                 const requestedTab = String(params.get('tab') || '').trim().toLowerCase();
                 const initialTab = requestedTab === 'appointments' ? 'main' : getInitialDashboardTab();
                 switchDashboardTab(initialTab);
+
+                if (requestedTab === 'appointments' && currentUser && currentUser.user_typ === 'bewerber') {
+                    const section = document.querySelector('[data-section="bewerbungstermine"]');
+                    if (section) {
+                        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
             } catch (err) {
                 alert(err.message);
             }
