@@ -122,36 +122,6 @@
                 <div id="mainTabPane">
                     <h2 style="margin-bottom: 10px;" id="listTitle">Meine Jobs</h2>
                     <div id="listContainer">Lade Daten...</div>
-                    <div id="bewerberCalendarSection" style="margin-top: 16px;" data-section="bewerbungstermine">
-                        <h2 style="margin-bottom: 10px;">Bewerbungstermine</h2>
-                        <p style="color: var(--gray); margin-bottom: 10px;">Wählen Sie Datum und Uhrzeit für Ihr Bewerbungsgespräch.</p>
-                        <div id="appointmentsAlert"></div>
-                        <form id="appointmentForm" style="margin-bottom: 14px;">
-                            <div class="form-grid-2">
-                                <div class="form-group">
-                                    <label for="appointmentName">Name</label>
-                                    <input class="form-input" id="appointmentName" type="text" maxlength="140" required />
-                                </div>
-                                <div class="form-group">
-                                    <label for="appointmentEmail">E-Mail</label>
-                                    <input class="form-input" id="appointmentEmail" type="email" maxlength="140" required />
-                                </div>
-                            </div>
-                            <div class="form-grid-2">
-                                <div class="form-group">
-                                    <label for="appointmentDate">Datum</label>
-                                    <input class="form-input" id="appointmentDate" type="date" required />
-                                </div>
-                                <div class="form-group">
-                                    <label for="appointmentTime">Uhrzeit</label>
-                                    <input class="form-input" id="appointmentTime" type="time" required />
-                                </div>
-                            </div>
-                            <button class="btn-primary" type="submit"><i class="fas fa-calendar-check"></i> Termin buchen</button>
-                        </form>
-                        <h3 style="margin-bottom: 10px;">Meine gebuchten Termine</h3>
-                        <div id="appointmentsContainer">Lade Termine...</div>
-                    </div>
                 </div>
 
                 <div id="tasksTabPane" style="display:none;">
@@ -179,12 +149,6 @@
                 .replaceAll("'", '&#039;');
         }
 
-        function showAppointmentAlert(message, type = 'error') {
-            const alertElement = document.getElementById('appointmentsAlert');
-            if (!alertElement) return;
-            alertElement.innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
-        }
-
         async function api(path, options = {}) {
             const response = await fetch(`${API_BASE}${path}`, options);
             const data = await response.json();
@@ -199,15 +163,10 @@
                 return;
             }
             currentUser = await api('/api/user');
-
-            const params = new URLSearchParams(window.location.search);
-            const requestedTab = String(params.get('tab') || '').trim().toLowerCase();
-            const forceAppointmentsMode = requestedTab === 'appointments';
             const normalizedUserType = String(currentUser.user_typ || '').trim().toLowerCase();
             const isArbeitgeber = normalizedUserType === 'arbeitgeber';
-            const isBewerber = normalizedUserType === 'bewerber';
 
-            if (normalizedUserType === 'admin' && !forceAppointmentsMode) {
+            if (normalizedUserType === 'admin') {
                 window.location.href = 'admin.html';
                 return;
             }
@@ -224,15 +183,8 @@
             if (isArbeitgeber) {
                 document.getElementById('arbeitgeberActions').style.display = 'block';
                 document.getElementById('listTitle').textContent = 'Meine veröffentlichten Jobs';
-                document.getElementById('bewerberCalendarSection').style.display = 'none';
-            } else if (isBewerber || forceAppointmentsMode) {
-                document.getElementById('listTitle').textContent = 'Meine Bewerbungen';
-                document.getElementById('bewerberCalendarSection').style.display = 'block';
-                const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
-                document.getElementById('appointmentName').value = fullName;
-                document.getElementById('appointmentEmail').value = currentUser.email || '';
             } else {
-                document.getElementById('bewerberCalendarSection').style.display = 'none';
+                document.getElementById('listTitle').textContent = 'Meine Bewerbungen';
             }
         }
 
@@ -363,51 +315,6 @@
             }
         }
 
-        async function loadAppointments() {
-            const container = document.getElementById('appointmentsContainer');
-            if (!container || !currentUser || currentUser.user_typ !== 'bewerber') {
-                return;
-            }
-
-            container.innerHTML = 'Lade Termine...';
-
-            try {
-                const response = await api('/api/termine');
-                const termine = (response.termine || []).slice().sort((left, right) => {
-                    const leftDate = new Date(left.termin_zeit).getTime();
-                    const rightDate = new Date(right.termin_zeit).getTime();
-                    return leftDate - rightDate;
-                });
-
-                container.innerHTML = termine.length ? `
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>E-Mail</th>
-                                <th>Datum</th>
-                                <th>Uhrzeit</th>
-                                <th>Erstellt</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${termine.map((termin) => `
-                                <tr>
-                                    <td>${escapeHtml(termin.name || '—')}</td>
-                                    <td>${escapeHtml(termin.email || '—')}</td>
-                                    <td>${escapeHtml(termin.datum || '—')}</td>
-                                    <td>${escapeHtml(termin.uhrzeit || '—')}</td>
-                                    <td>${termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleString('de-DE') : '—'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                ` : '<p>Noch keine Bewerbungstermine gebucht.</p>';
-            } catch (error) {
-                container.innerHTML = '<p>Fehler beim Laden der Termine.</p>';
-            }
-        }
-
         function switchDashboardTab(tab) {
             const mainPane = document.getElementById('mainTabPane');
             const taskPane = document.getElementById('tasksTabPane');
@@ -486,50 +393,12 @@
             window.location.href = 'index.html';
         });
 
-        document.getElementById('appointmentForm').addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const payload = {
-                name: document.getElementById('appointmentName').value.trim(),
-                email: document.getElementById('appointmentEmail').value.trim(),
-                datum: document.getElementById('appointmentDate').value,
-                uhrzeit: document.getElementById('appointmentTime').value
-            };
-
-            try {
-                await api('/api/termine', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                showAppointmentAlert('Termin erfolgreich gebucht.', 'success');
-                document.getElementById('appointmentDate').value = '';
-                document.getElementById('appointmentTime').value = '';
-                await loadAppointments();
-            } catch (error) {
-                showAppointmentAlert(error.message || 'Termin konnte nicht gebucht werden.');
-            }
-        });
-
         (async () => {
             try {
                 await loadCurrentUser();
                 await loadData();
                 await loadTasks();
-                await loadAppointments();
-
-                const params = new URLSearchParams(window.location.search);
-                const requestedTab = String(params.get('tab') || '').trim().toLowerCase();
-                const initialTab = requestedTab === 'appointments' ? 'main' : getInitialDashboardTab();
-                switchDashboardTab(initialTab);
-
-                if (requestedTab === 'appointments' && currentUser && currentUser.user_typ === 'bewerber') {
-                    const section = document.querySelector('[data-section="bewerbungstermine"]');
-                    if (section) {
-                        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                }
+                switchDashboardTab(getInitialDashboardTab());
             } catch (err) {
                 alert(err.message);
             }

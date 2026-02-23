@@ -19,7 +19,7 @@
                 <ul class="nav-menu">
                     <li><a href="#home">Home</a></li>
                     <li><a href="jobs.html">Jobs</a></li>
-                    <li><a href="dashboard.html?tab=appointments">Bewerbungstermine</a></li>
+                    <li><a href="#bewerbungstermine">Bewerbungstermine</a></li>
                     <li><a href="#kontakt">Kontakt</a></li>
                 </ul>
                 <div class="nav-buttons">
@@ -65,7 +65,7 @@
                 <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap;">
                     <button class="btn-primary" onclick="window.location.href='jobs.html'">Zu den Jobs</button>
                     <button class="btn-secondary" onclick="window.location.href='register.html'">Kostenlos registrieren</button>
-                    <button class="btn-secondary" onclick="window.location.href='dashboard.html?tab=appointments'">Bewerbungstermin buchen</button>
+                    <button class="btn-secondary" onclick="document.getElementById('bewerbungstermine').scrollIntoView({ behavior: 'smooth' })">Bewerbungstermin buchen</button>
                 </div>
             </div>
 
@@ -78,6 +78,47 @@
                     <p style="margin-bottom: 10px;">Öffnen Sie den Tab <strong>Jobs</strong>, wählen Sie passende Stellen und starten Sie Ihre Bewerbung direkt online.</p>
                     <p style="color: var(--gray); margin: 0;">Danach behalten Sie alle Schritte, Aufgaben und Status zentral im Dashboard im Blick.</p>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="jobs-section" id="bewerbungstermine">
+        <div class="container">
+            <div class="section-header">
+                <h2>Bewerbungstermine</h2>
+                <p>Wählen Sie hier Datum und Uhrzeit für Ihr Bewerbungsgespräch.</p>
+            </div>
+
+            <div class="card" style="max-width: 900px; margin: 0 auto;">
+                <div id="appointmentsPublicAlert"></div>
+                <form id="appointmentsPublicForm" style="margin-bottom: 14px;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="appointmentsPublicName">Name</label>
+                            <input class="form-input" id="appointmentsPublicName" type="text" maxlength="140" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="appointmentsPublicEmail">E-Mail</label>
+                            <input class="form-input" id="appointmentsPublicEmail" type="email" maxlength="140" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="appointmentsPublicDate">Datum</label>
+                            <input class="form-input" id="appointmentsPublicDate" type="date" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="appointmentsPublicTime">Uhrzeit</label>
+                            <input class="form-input" id="appointmentsPublicTime" type="time" required />
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="appointmentsPublicSubmit" type="submit">
+                        <i class="fas fa-calendar-check"></i> Termin buchen
+                    </button>
+                </form>
+
+                <h3 style="margin-bottom: 10px;">Meine gebuchten Termine</h3>
+                <div id="appointmentsPublicList">Bitte einloggen, um Termine zu sehen und zu buchen.</div>
             </div>
         </div>
     </section>
@@ -209,12 +250,101 @@
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
 
+        let currentSessionUser = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        async function api(path, options = {}) {
+            const response = await fetch(`${API_BASE}${path}`, options);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Fehler');
+            return data;
+        }
+
+        function showAppointmentsPublicAlert(message, type = 'error') {
+            const alertElement = document.getElementById('appointmentsPublicAlert');
+            if (!alertElement) return;
+            alertElement.innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
+        }
+
+        function setAppointmentsAvailability(isEnabled, message = '') {
+            const form = document.getElementById('appointmentsPublicForm');
+            const submitButton = document.getElementById('appointmentsPublicSubmit');
+            const nameInput = document.getElementById('appointmentsPublicName');
+            const emailInput = document.getElementById('appointmentsPublicEmail');
+            const dateInput = document.getElementById('appointmentsPublicDate');
+            const timeInput = document.getElementById('appointmentsPublicTime');
+            const list = document.getElementById('appointmentsPublicList');
+
+            if (!form || !submitButton || !nameInput || !emailInput || !dateInput || !timeInput || !list) return;
+
+            submitButton.disabled = !isEnabled;
+            nameInput.disabled = !isEnabled;
+            emailInput.disabled = !isEnabled;
+            dateInput.disabled = !isEnabled;
+            timeInput.disabled = !isEnabled;
+
+            if (!isEnabled) {
+                list.innerHTML = `<p>${escapeHtml(message || 'Bitte einloggen, um Termine zu sehen und zu buchen.')}</p>`;
+            }
+        }
+
+        async function loadPublicAppointments() {
+            const list = document.getElementById('appointmentsPublicList');
+            if (!list || !currentSessionUser) return;
+
+            list.innerHTML = 'Lade Termine...';
+            try {
+                const response = await api('/api/termine');
+                const termine = (response.termine || []).slice().sort((left, right) => {
+                    const leftDate = new Date(left.termin_zeit).getTime();
+                    const rightDate = new Date(right.termin_zeit).getTime();
+                    return leftDate - rightDate;
+                });
+
+                list.innerHTML = termine.length ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>E-Mail</th>
+                                <th>Datum</th>
+                                <th>Uhrzeit</th>
+                                <th>Erstellt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${termine.map((termin) => `
+                                <tr>
+                                    <td>${escapeHtml(termin.name || '—')}</td>
+                                    <td>${escapeHtml(termin.email || '—')}</td>
+                                    <td>${escapeHtml(termin.datum || '—')}</td>
+                                    <td>${escapeHtml(termin.uhrzeit || '—')}</td>
+                                    <td>${termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleString('de-DE') : '—'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p>Noch keine Termine gebucht.</p>';
+            } catch (error) {
+                list.innerHTML = '<p>Termine konnten nicht geladen werden.</p>';
+            }
+        }
+
         async function updateNavForSession() {
             try {
                 const response = await fetch(`${API_BASE}/api/check-session`);
                 const data = await response.json();
 
                 if (!data.isAuthenticated) {
+                    setAppointmentsAvailability(false, 'Bitte zuerst einloggen, um einen Termin zu buchen.');
                     return;
                 }
 
@@ -248,10 +378,48 @@
                 if (registerBtn) {
                     registerBtn.style.display = 'none';
                 }
+
+                currentSessionUser = currentUser;
+                setAppointmentsAvailability(true);
+
+                if (currentUser) {
+                    const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
+                    document.getElementById('appointmentsPublicName').value = fullName;
+                    document.getElementById('appointmentsPublicEmail').value = currentUser.email || '';
+                }
+
+                await loadPublicAppointments();
             } catch (error) {
                 console.error('Fehler beim Prüfen der Session:', error);
+                setAppointmentsAvailability(false, 'Bitte zuerst einloggen, um einen Termin zu buchen.');
             }
         }
+
+        document.getElementById('appointmentsPublicForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const payload = {
+                name: document.getElementById('appointmentsPublicName').value.trim(),
+                email: document.getElementById('appointmentsPublicEmail').value.trim(),
+                datum: document.getElementById('appointmentsPublicDate').value,
+                uhrzeit: document.getElementById('appointmentsPublicTime').value
+            };
+
+            try {
+                await api('/api/termine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                showAppointmentsPublicAlert('Termin erfolgreich gebucht.', 'success');
+                document.getElementById('appointmentsPublicDate').value = '';
+                document.getElementById('appointmentsPublicTime').value = '';
+                await loadPublicAppointments();
+            } catch (error) {
+                showAppointmentsPublicAlert(error.message || 'Termin konnte nicht gebucht werden.');
+            }
+        });
 
         // Init
         updateNavForSession();
