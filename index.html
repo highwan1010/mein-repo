@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ID VERMITTLUNG - Moderne Jobvermittlung</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -19,7 +20,7 @@
                 <ul class="nav-menu">
                     <li><a href="#home">Home</a></li>
                     <li><a href="jobs.html">Jobs</a></li>
-                    <li><a href="#bewerbungstermine">Bewerbungstermine</a></li>
+                    <li><a href="#bewerbungstermine">Termin buchen</a></li>
                     <li><a href="#kontakt">Kontakt</a></li>
                 </ul>
                 <div class="nav-buttons">
@@ -65,7 +66,7 @@
                 <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap;">
                     <button class="btn-primary" onclick="window.location.href='jobs.html'">Zu den Jobs</button>
                     <button class="btn-secondary" onclick="window.location.href='register.html'">Kostenlos registrieren</button>
-                    <button class="btn-secondary" onclick="document.getElementById('bewerbungstermine').scrollIntoView({ behavior: 'smooth' })">Bewerbungstermin buchen</button>
+                    <button class="btn-secondary" onclick="document.getElementById('bewerbungstermine').scrollIntoView({ behavior: 'smooth' })">Termin buchen</button>
                 </div>
             </div>
 
@@ -85,13 +86,16 @@
     <section class="jobs-section" id="bewerbungstermine">
         <div class="container">
             <div class="section-header">
-                <h2>Bewerbungstermine</h2>
-                <p>Wählen Sie hier Datum und Uhrzeit für Ihr Bewerbungsgespräch.</p>
+                <h2>Termin buchen</h2>
+                <p>Wählen Sie hier modern und schnell Ihr Datum und Ihre Uhrzeit aus.</p>
             </div>
 
-            <div class="card" style="max-width: 900px; margin: 0 auto;">
+            <div class="card appointments-booking-card">
+                <div id="appointmentsLoginHint" class="appointments-login-hint" style="display:none;">
+                    Bitte zuerst einloggen, um einen Termin zu buchen.
+                </div>
                 <div id="appointmentsPublicAlert"></div>
-                <form id="appointmentsPublicForm" style="margin-bottom: 14px;">
+                <form id="appointmentsPublicForm" class="appointments-booking-form">
                     <div class="form-grid-2">
                         <div class="form-group">
                             <label for="appointmentsPublicName">Name</label>
@@ -102,14 +106,14 @@
                             <input class="form-input" id="appointmentsPublicEmail" type="email" maxlength="140" required />
                         </div>
                     </div>
-                    <div class="form-grid-2">
-                        <div class="form-group">
+                    <div class="form-grid-2 appointment-picker-grid">
+                        <div class="form-group appointment-picker-field">
                             <label for="appointmentsPublicDate">Datum</label>
-                            <input class="form-input" id="appointmentsPublicDate" type="date" required />
+                            <input class="form-input appointment-date-input" id="appointmentsPublicDate" type="date" required />
                         </div>
-                        <div class="form-group">
+                        <div class="form-group appointment-picker-field">
                             <label for="appointmentsPublicTime">Uhrzeit</label>
-                            <input class="form-input" id="appointmentsPublicTime" type="time" required />
+                            <input class="form-input appointment-time-input" id="appointmentsPublicTime" type="time" required />
                         </div>
                     </div>
                     <button class="btn-primary" id="appointmentsPublicSubmit" type="submit">
@@ -282,8 +286,9 @@
             const dateInput = document.getElementById('appointmentsPublicDate');
             const timeInput = document.getElementById('appointmentsPublicTime');
             const list = document.getElementById('appointmentsPublicList');
+            const loginHint = document.getElementById('appointmentsLoginHint');
 
-            if (!form || !submitButton || !nameInput || !emailInput || !dateInput || !timeInput || !list) return;
+            if (!form || !submitButton || !nameInput || !emailInput || !dateInput || !timeInput || !list || !loginHint) return;
 
             submitButton.disabled = !isEnabled;
             nameInput.disabled = !isEnabled;
@@ -292,7 +297,11 @@
             timeInput.disabled = !isEnabled;
 
             if (!isEnabled) {
-                list.innerHTML = `<p>${escapeHtml(message || 'Bitte einloggen, um Termine zu sehen und zu buchen.')}</p>`;
+                loginHint.textContent = message || 'Bitte zuerst einloggen, um einen Termin zu buchen.';
+                loginHint.style.display = 'block';
+                list.innerHTML = '<p>Bitte einloggen, um Termine zu sehen.</p>';
+            } else {
+                loginHint.style.display = 'none';
             }
         }
 

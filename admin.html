@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Panel - JobVermittlung</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <style>
@@ -11,7 +12,7 @@
             display: grid;
             grid-template-columns: 320px 1fr;
             gap: 16px;
-            min-height: 540px;
+            min-height: 680px;
         }
 
         .chat-admin-sidebar {
@@ -19,7 +20,7 @@
             border-radius: 14px;
             padding: 10px;
             overflow-y: auto;
-            max-height: 620px;
+            max-height: 760px;
             background: var(--white);
         }
 
@@ -73,7 +74,7 @@
             border-radius: 14px;
             display: flex;
             flex-direction: column;
-            min-height: 540px;
+            min-height: 680px;
             background: var(--white);
             overflow: hidden;
         }
@@ -883,6 +884,7 @@
                             <th>Status</th>
                             <th>Fällig</th>
                             <th>Erstellt</th>
+                            <th>Aktion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -897,12 +899,43 @@
                                 <td><span class="badge ${taskStatus.className}">${taskStatus.label}</span></td>
                                 <td>${formatDate(task.faellig_am)}</td>
                                 <td>${formatDate(task.erstellt_am)}</td>
+                                <td>
+                                    <div style="display:flex; gap:8px; align-items:center; min-width: 250px;">
+                                        <select class="form-input" id="adminTaskStatus-${task.id}" style="min-width: 145px;">
+                                            <option value="offen" ${task.status === 'offen' ? 'selected' : ''}>Offen</option>
+                                            <option value="in_bearbeitung" ${task.status === 'in_bearbeitung' ? 'selected' : ''}>In Bearbeitung</option>
+                                            <option value="erledigt" ${task.status === 'erledigt' ? 'selected' : ''}>Erledigt</option>
+                                        </select>
+                                        <button class="btn-secondary" type="button" onclick="updateAdminTaskStatus(${task.id})">Speichern</button>
+                                    </div>
+                                </td>
                             </tr>
                         `;
                         }).join('')}
                     </tbody>
                 </table>
             `;
+        }
+
+        async function updateAdminTaskStatus(taskId) {
+            const statusSelect = document.getElementById(`adminTaskStatus-${taskId}`);
+            if (!statusSelect) return;
+
+            const status = String(statusSelect.value || '').trim();
+            if (!status) return;
+
+            try {
+                await api(`/api/admin/tasks/${taskId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+
+                showTaskManageAlert('Aufgabenstatus erfolgreich aktualisiert.', 'success');
+                await loadAdminData();
+            } catch (error) {
+                showTaskManageAlert(error.message || 'Aufgabenstatus konnte nicht geändert werden.');
+            }
         }
 
         function renderAppointments(termine) {

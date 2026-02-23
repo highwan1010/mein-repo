@@ -428,6 +428,68 @@ select {
     margin-bottom: 12px;
 }
 
+.appointments-booking-card {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.appointments-booking-form {
+    margin-bottom: 14px;
+}
+
+.appointments-login-hint {
+    margin-bottom: 12px;
+    color: var(--danger);
+    font-weight: 900;
+    font-size: 18px;
+    line-height: 1.35;
+}
+
+.appointment-picker-grid {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.appointment-picker-field {
+    background: linear-gradient(135deg, var(--white), var(--light));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 10px 8px;
+}
+
+.appointment-picker-field label {
+    color: var(--gray);
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.appointment-date-input,
+.appointment-time-input {
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--white);
+    min-height: 46px;
+    font-weight: 600;
+    color: var(--dark);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.appointment-date-input:hover,
+.appointment-time-input:hover {
+    border-color: var(--primary);
+}
+
+.appointment-date-input:focus,
+.appointment-time-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    transform: translateY(-1px);
+    outline: none;
+}
+
 .table {
     width: 100%;
     border-collapse: collapse;
