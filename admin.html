@@ -169,11 +169,100 @@
         </div>
     </main>
 
+    <div class="modal" id="editModal">
+        <div class="modal-card" style="max-width: 880px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+                <h2 id="editModalTitle">Bearbeiten</h2>
+                <button class="btn-secondary" type="button" id="closeEditModalBtn">Schließen</button>
+            </div>
+
+            <div id="editModalAlert"></div>
+
+            <form id="editModalForm">
+                <div id="userEditFields" style="display:none;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editUserVorname">Vorname</label>
+                            <input class="form-input" id="editUserVorname" type="text" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserNachname">Nachname</label>
+                            <input class="form-input" id="editUserNachname" type="text" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editUserEmail">E-Mail</label>
+                            <input class="form-input" id="editUserEmail" type="email" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserTyp">Typ</label>
+                            <select class="form-input" id="editUserTyp" required>
+                                <option value="bewerber">Bewerber</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserFirma">Firma (optional)</label>
+                        <input class="form-input" id="editUserFirma" type="text" />
+                    </div>
+                </div>
+
+                <div id="jobEditFields" style="display:none;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editJobTitel">Titel</label>
+                            <input class="form-input" id="editJobTitel" type="text" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="editJobFirma">Firma</label>
+                            <input class="form-input" id="editJobFirma" type="text" required />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editJobStandort">Standort</label>
+                            <input class="form-input" id="editJobStandort" type="text" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="editJobTyp">Beschäftigungsart</label>
+                            <input class="form-input" id="editJobTyp" type="text" />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="editJobStatus">Status</label>
+                            <select class="form-input" id="editJobStatus" required>
+                                <option value="aktiv">Aktiv</option>
+                                <option value="pausiert">Pausiert</option>
+                                <option value="geschlossen">Geschlossen</option>
+                            </select>
+                        </div>
+                        <div></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editJobBeschreibung">Beschreibung</label>
+                        <textarea class="form-input" id="editJobBeschreibung" rows="5"></textarea>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
+                    <button class="btn-secondary" type="button" id="cancelEditBtn">Abbrechen</button>
+                    <button class="btn-primary" type="submit">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="config.js"></script>
     <script>
         const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
+        let adminUsers = [];
+        let adminJobs = [];
+        let editContext = null;
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -195,14 +284,6 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Fehler');
             return data;
-        }
-
-        function escapeForJsString(value) {
-            return String(value ?? '')
-                .replaceAll('\\', '\\\\')
-                .replaceAll("'", "\\'")
-                .replaceAll('\n', ' ')
-                .replaceAll('\r', ' ');
         }
 
         function showJobCreateAlert(message, type = 'error') {
@@ -258,10 +339,10 @@
                                 <td>${escapeHtml(user.firma || '—')}</td>
                                 <td>${formatDate(user.erstellt_am)}</td>
                                 <td>
-                                    <button class="btn-secondary" onclick="editUser(${user.id}, '${escapeForJsString(user.vorname)}', '${escapeForJsString(user.nachname)}', '${escapeForJsString(user.email)}', '${escapeForJsString(user.user_typ)}', '${escapeForJsString(user.firma || '')}')">
+                                    <button class="btn-secondary" onclick="editUser(${user.id})">
                                         Bearbeiten
                                     </button>
-                                    <button class="btn-danger" style="margin-left:8px;" onclick="deleteUser(${user.id}, '${escapeForJsString(user.email)}')">
+                                    <button class="btn-danger" style="margin-left:8px;" onclick="deleteUser(${user.id}, '${escapeHtml(user.email)}')">
                                         Löschen
                                     </button>
                                 </td>
@@ -272,46 +353,39 @@
             `;
         }
 
-        async function editUser(id, currentVorname, currentNachname, currentEmail, currentUserTyp, currentFirma) {
-            const vorname = prompt('Vorname:', currentVorname);
-            if (vorname === null) return;
+        function openEditModal() {
+            document.getElementById('editModal').classList.add('active');
+        }
 
-            const nachname = prompt('Nachname:', currentNachname);
-            if (nachname === null) return;
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+            document.getElementById('editModalAlert').innerHTML = '';
+            editContext = null;
+        }
 
-            const email = prompt('E-Mail:', currentEmail);
-            if (email === null) return;
+        function showEditModalAlert(message, type = 'error') {
+            document.getElementById('editModalAlert').innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
+        }
 
-            const userTypInput = prompt('Typ (bewerber/admin):', currentUserTyp);
-            if (userTypInput === null) return;
-
-            const firma = prompt('Firma (optional):', currentFirma || '');
-            if (firma === null) return;
-
-            const userTyp = String(userTypInput).trim().toLowerCase();
-            if (userTyp !== 'bewerber' && userTyp !== 'admin') {
-                alert('Ungültiger Typ. Erlaubt: bewerber oder admin');
+        function editUser(id) {
+            const user = adminUsers.find((item) => Number(item.id) === Number(id));
+            if (!user) {
+                showUserManageAlert('Benutzer nicht gefunden.');
                 return;
             }
 
-            try {
-                await api(`/api/admin/users/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        vorname: String(vorname).trim(),
-                        nachname: String(nachname).trim(),
-                        email: String(email).trim(),
-                        userTyp,
-                        firma: String(firma).trim() || null
-                    })
-                });
+            editContext = { type: 'user', id: Number(id) };
+            document.getElementById('editModalTitle').textContent = `Benutzer bearbeiten (#${id})`;
+            document.getElementById('userEditFields').style.display = 'block';
+            document.getElementById('jobEditFields').style.display = 'none';
 
-                await loadAdminData();
-                alert('Benutzer erfolgreich aktualisiert.');
-            } catch (error) {
-                alert(error.message || 'Fehler beim Aktualisieren des Benutzers.');
-            }
+            document.getElementById('editUserVorname').value = user.vorname || '';
+            document.getElementById('editUserNachname').value = user.nachname || '';
+            document.getElementById('editUserEmail').value = user.email || '';
+            document.getElementById('editUserTyp').value = user.user_typ || 'bewerber';
+            document.getElementById('editUserFirma').value = user.firma || '';
+
+            openEditModal();
         }
 
         async function deleteUser(id, email) {
@@ -354,7 +428,7 @@
                                 <td>${escapeHtml(`${job.arbeitgeber_vorname || ''} ${job.arbeitgeber_nachname || ''}`.trim() || job.arbeitgeber_email || '—')}</td>
                                 <td>${formatDate(job.erstellt_am)}</td>
                                 <td>
-                                    <button class="btn-secondary" onclick="editJob(${job.id}, '${escapeForJsString(job.titel)}', '${escapeForJsString(job.firma)}', '${escapeForJsString(job.standort)}', '${escapeForJsString(job.job_typ || '')}', '${escapeForJsString(job.status || 'aktiv')}', '${escapeForJsString(job.beschreibung || '')}')">
+                                    <button class="btn-secondary" onclick="editJob(${job.id})">
                                         Bearbeiten
                                     </button>
                                 </td>
@@ -365,49 +439,76 @@
             `;
         }
 
-        async function editJob(id, currentTitel, currentFirma, currentStandort, currentJobTyp, currentStatus, currentBeschreibung) {
-            const titel = prompt('Titel:', currentTitel);
-            if (titel === null) return;
-
-            const firma = prompt('Firma:', currentFirma);
-            if (firma === null) return;
-
-            const standort = prompt('Standort:', currentStandort);
-            if (standort === null) return;
-
-            const jobTyp = prompt('Beschäftigungsart:', currentJobTyp || 'Vollzeit');
-            if (jobTyp === null) return;
-
-            const status = prompt('Status (aktiv/pausiert/geschlossen):', currentStatus || 'aktiv');
-            if (status === null) return;
-
-            const normalizedStatus = String(status).trim().toLowerCase();
-            if (!['aktiv', 'pausiert', 'geschlossen'].includes(normalizedStatus)) {
-                alert('Ungültiger Status. Erlaubt: aktiv, pausiert, geschlossen');
+        function editJob(id) {
+            const job = adminJobs.find((item) => Number(item.id) === Number(id));
+            if (!job) {
+                showJobCreateAlert('Job nicht gefunden.');
                 return;
             }
 
-            const beschreibung = prompt('Beschreibung:', currentBeschreibung || '');
-            if (beschreibung === null) return;
+            editContext = { type: 'job', id: Number(id) };
+            document.getElementById('editModalTitle').textContent = `Job bearbeiten (#${id})`;
+            document.getElementById('userEditFields').style.display = 'none';
+            document.getElementById('jobEditFields').style.display = 'block';
+
+            document.getElementById('editJobTitel').value = job.titel || '';
+            document.getElementById('editJobFirma').value = job.firma || '';
+            document.getElementById('editJobStandort').value = job.standort || '';
+            document.getElementById('editJobTyp').value = job.job_typ || '';
+            document.getElementById('editJobStatus').value = job.status || 'aktiv';
+            document.getElementById('editJobBeschreibung').value = job.beschreibung || '';
+
+            openEditModal();
+        }
+
+        async function saveEditModal(event) {
+            event.preventDefault();
+            if (!editContext) return;
 
             try {
-                await api(`/api/admin/jobs/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        titel: String(titel).trim(),
-                        firma: String(firma).trim(),
-                        standort: String(standort).trim(),
-                        jobTyp: String(jobTyp).trim(),
-                        status: normalizedStatus,
-                        beschreibung: String(beschreibung).trim()
-                    })
-                });
+                if (editContext.type === 'user') {
+                    const userTyp = String(document.getElementById('editUserTyp').value).trim().toLowerCase();
+                    if (!['bewerber', 'admin'].includes(userTyp)) {
+                        showEditModalAlert('Ungültiger Benutzer-Typ.');
+                        return;
+                    }
+
+                    await api(`/api/admin/users/${editContext.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            vorname: document.getElementById('editUserVorname').value.trim(),
+                            nachname: document.getElementById('editUserNachname').value.trim(),
+                            email: document.getElementById('editUserEmail').value.trim(),
+                            userTyp,
+                            firma: document.getElementById('editUserFirma').value.trim() || null
+                        })
+                    });
+
+                    showUserManageAlert('Benutzer erfolgreich aktualisiert.', 'success');
+                }
+
+                if (editContext.type === 'job') {
+                    await api(`/api/admin/jobs/${editContext.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            titel: document.getElementById('editJobTitel').value.trim(),
+                            firma: document.getElementById('editJobFirma').value.trim(),
+                            standort: document.getElementById('editJobStandort').value.trim(),
+                            jobTyp: document.getElementById('editJobTyp').value.trim(),
+                            status: document.getElementById('editJobStatus').value,
+                            beschreibung: document.getElementById('editJobBeschreibung').value.trim()
+                        })
+                    });
+
+                    showJobCreateAlert('Job erfolgreich aktualisiert.', 'success');
+                }
 
                 await loadAdminData();
-                showJobCreateAlert('Job erfolgreich aktualisiert.', 'success');
+                closeEditModal();
             } catch (error) {
-                showJobCreateAlert(error.message || 'Fehler beim Aktualisieren des Jobs.');
+                showEditModalAlert(error.message || 'Speichern fehlgeschlagen.');
             }
         }
 
@@ -514,6 +615,9 @@
             document.getElementById('countBewerbungen').textContent = bewerbungenRes.bewerbungen.length;
             document.getElementById('countFavoriten').textContent = favoritenRes.favoriten.length;
 
+            adminUsers = usersRes.users || [];
+            adminJobs = jobsRes.jobs || [];
+
             document.getElementById('usersTable').innerHTML = renderUsers(usersRes.users);
             document.getElementById('jobsTable').innerHTML = renderJobs(jobsRes.jobs);
             document.getElementById('bewerbungenTable').innerHTML = renderBewerbungen(bewerbungenRes.bewerbungen);
@@ -551,6 +655,10 @@
             await api('/api/logout', { method: 'POST' });
             window.location.href = 'index.html';
         });
+
+        document.getElementById('closeEditModalBtn').addEventListener('click', closeEditModal);
+        document.getElementById('cancelEditBtn').addEventListener('click', closeEditModal);
+        document.getElementById('editModalForm').addEventListener('submit', saveEditModal);
 
         document.getElementById('createJobForm').addEventListener('submit', async (event) => {
             event.preventDefault();
