@@ -48,6 +48,7 @@ const {
     getAllTermineAdmin,
     updateTerminByUser,
     deleteTerminByUser,
+    deleteTerminByAdmin,
     createChatMessage,
     getChatMessagesByConversation,
     getChatConversationMeta,
@@ -1329,6 +1330,24 @@ app.get('/api/admin/termine', requireAdmin, async (req, res) => {
         res.json({ success: true, termine });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Termine' });
+    }
+});
+
+app.delete('/api/admin/termine/:id', requireAdmin, async (req, res) => {
+    try {
+        const terminId = Number(req.params.id);
+        if (!Number.isInteger(terminId) || terminId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Termin-ID' });
+        }
+
+        const deleted = await deleteTerminByAdmin(terminId);
+        if (!deleted) {
+            return res.status(404).json({ error: 'Termin nicht gefunden' });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Fehler beim Löschen des Termins' });
     }
 });
 

@@ -106,16 +106,29 @@
                             <input class="form-input" id="appointmentsPublicEmail" type="email" maxlength="140" required />
                         </div>
                     </div>
-                    <div class="form-grid-2 appointment-picker-grid">
-                        <div class="form-group appointment-picker-field">
-                            <label for="appointmentsPublicDate">Datum</label>
-                            <input class="form-input appointment-date-input" id="appointmentsPublicDate" type="date" required />
+                    <div class="appointment-picker-layout" id="appointmentsPickerRoot">
+                        <div class="appointment-picker-field">
+                            <div class="appointment-picker-header-row">
+                                <button class="btn-secondary appointment-nav-btn" id="appointmentMonthPrev" type="button" onclick="changeAppointmentMonth(-1)">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <div class="appointment-month-label" id="appointmentCalendarMonth">Monat</div>
+                                <button class="btn-secondary appointment-nav-btn" id="appointmentMonthNext" type="button" onclick="changeAppointmentMonth(1)">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <div class="appointment-weekdays">
+                                <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                            </div>
+                            <div class="appointment-calendar-grid" id="appointmentCalendarGrid"></div>
                         </div>
-                        <div class="form-group appointment-picker-field">
-                            <label for="appointmentsPublicTime">Uhrzeit</label>
-                            <input class="form-input appointment-time-input" id="appointmentsPublicTime" type="time" required />
+                        <div class="appointment-picker-field">
+                            <label>Uhrzeit auswählen</label>
+                            <div class="appointment-time-slots" id="appointmentTimeSlots"></div>
                         </div>
                     </div>
+                    <input id="appointmentsPublicDate" type="hidden" required />
+                    <input id="appointmentsPublicTime" type="hidden" required />
                     <button class="btn-primary" id="appointmentsPublicSubmit" type="submit">
                         <i class="fas fa-calendar-check"></i> Termin buchen
                     </button>
@@ -253,8 +266,13 @@
         const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
+        const APPOINTMENT_TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
         let currentSessionUser = null;
+        let appointmentPickerEnabled = false;
+        let appointmentCalendarDate = new Date();
+        let selectedAppointmentDate = '';
+        let selectedAppointmentTime = '09:00';
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -278,6 +296,111 @@
             alertElement.innerHTML = `<div class="alert ${type}">${escapeHtml(message)}</div>`;
         }
 
+        function toDateInputValue(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function applyAppointmentSelection() {
+            const dateInput = document.getElementById('appointmentsPublicDate');
+            const timeInput = document.getElementById('appointmentsPublicTime');
+            if (dateInput) dateInput.value = selectedAppointmentDate;
+            if (timeInput) timeInput.value = selectedAppointmentTime;
+        }
+
+        function changeAppointmentMonth(delta) {
+            appointmentCalendarDate = new Date(appointmentCalendarDate.getFullYear(), appointmentCalendarDate.getMonth() + Number(delta), 1);
+            renderAppointmentCalendar();
+        }
+
+        function selectAppointmentDate(dateValue) {
+            selectedAppointmentDate = dateValue;
+            applyAppointmentSelection();
+            renderAppointmentCalendar();
+        }
+
+        function selectAppointmentTime(timeValue) {
+            selectedAppointmentTime = timeValue;
+            applyAppointmentSelection();
+            renderAppointmentTimeSlots();
+        }
+
+        function renderAppointmentCalendar() {
+            const monthLabel = document.getElementById('appointmentCalendarMonth');
+            const grid = document.getElementById('appointmentCalendarGrid');
+            if (!monthLabel || !grid) return;
+
+            const year = appointmentCalendarDate.getFullYear();
+            const monthIndex = appointmentCalendarDate.getMonth();
+            monthLabel.textContent = new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(new Date(year, monthIndex, 1));
+
+            const firstOfMonth = new Date(year, monthIndex, 1);
+            const firstWeekDay = (firstOfMonth.getDay() + 6) % 7;
+            const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+            const todayValue = toDateInputValue(new Date());
+
+            const cells = [];
+            for (let i = 0; i < firstWeekDay; i += 1) {
+                cells.push('<button class="appointment-day-btn empty" type="button" disabled></button>');
+            }
+
+            for (let day = 1; day <= daysInMonth; day += 1) {
+                const current = new Date(year, monthIndex, day);
+                const dateValue = toDateInputValue(current);
+                const isPast = dateValue < todayValue;
+                const isSelected = dateValue === selectedAppointmentDate;
+                const classNames = ['appointment-day-btn'];
+                if (isSelected) classNames.push('selected');
+                if (isPast || !appointmentPickerEnabled) classNames.push('disabled');
+
+                cells.push(`
+                    <button
+                        class="${classNames.join(' ')}"
+                        type="button"
+                        ${isPast || !appointmentPickerEnabled ? 'disabled' : ''}
+                        onclick="selectAppointmentDate('${dateValue}')"
+                    >${day}</button>
+                `);
+            }
+
+            grid.innerHTML = cells.join('');
+        }
+
+        function renderAppointmentTimeSlots() {
+            const slots = document.getElementById('appointmentTimeSlots');
+            if (!slots) return;
+
+            slots.innerHTML = APPOINTMENT_TIME_SLOTS.map((timeValue) => {
+                const classNames = ['appointment-time-slot'];
+                if (timeValue === selectedAppointmentTime) classNames.push('selected');
+                if (!appointmentPickerEnabled) classNames.push('disabled');
+
+                return `
+                    <button
+                        class="${classNames.join(' ')}"
+                        type="button"
+                        ${appointmentPickerEnabled ? '' : 'disabled'}
+                        onclick="selectAppointmentTime('${timeValue}')"
+                    >${timeValue}</button>
+                `;
+            }).join('');
+        }
+
+        function initializeAppointmentPicker() {
+            const today = new Date();
+            appointmentCalendarDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            selectedAppointmentDate = toDateInputValue(today);
+            if (!APPOINTMENT_TIME_SLOTS.includes(selectedAppointmentTime)) {
+                selectedAppointmentTime = APPOINTMENT_TIME_SLOTS[0] || '';
+            }
+
+            applyAppointmentSelection();
+            renderAppointmentCalendar();
+            renderAppointmentTimeSlots();
+        }
+
         function setAppointmentsAvailability(isEnabled, message = '') {
             const form = document.getElementById('appointmentsPublicForm');
             const submitButton = document.getElementById('appointmentsPublicSubmit');
@@ -285,16 +408,22 @@
             const emailInput = document.getElementById('appointmentsPublicEmail');
             const dateInput = document.getElementById('appointmentsPublicDate');
             const timeInput = document.getElementById('appointmentsPublicTime');
+            const pickerRoot = document.getElementById('appointmentsPickerRoot');
             const list = document.getElementById('appointmentsPublicList');
             const loginHint = document.getElementById('appointmentsLoginHint');
 
-            if (!form || !submitButton || !nameInput || !emailInput || !dateInput || !timeInput || !list || !loginHint) return;
+            if (!form || !submitButton || !nameInput || !emailInput || !dateInput || !timeInput || !pickerRoot || !list || !loginHint) return;
+
+            appointmentPickerEnabled = Boolean(isEnabled);
 
             submitButton.disabled = !isEnabled;
             nameInput.disabled = !isEnabled;
             emailInput.disabled = !isEnabled;
             dateInput.disabled = !isEnabled;
             timeInput.disabled = !isEnabled;
+            pickerRoot.classList.toggle('disabled', !isEnabled);
+            renderAppointmentCalendar();
+            renderAppointmentTimeSlots();
 
             if (!isEnabled) {
                 loginHint.textContent = message || 'Bitte zuerst einloggen, um einen Termin zu buchen.';
@@ -482,6 +611,7 @@
         });
 
         // Init
+        initializeAppointmentPicker();
         updateNavForSession();
     </script>
     <script src="chat-widget.js"></script>

@@ -962,6 +962,7 @@
                             <th>Datum</th>
                             <th>Uhrzeit</th>
                             <th>Gebucht am</th>
+                            <th>Aktion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -974,11 +975,27 @@
                                 <td>${escapeHtml(termin.datum || '—')}</td>
                                 <td>${escapeHtml(termin.uhrzeit || '—')}</td>
                                 <td>${formatDate(termin.erstellt_am)}</td>
+                                <td>
+                                    <button class="btn-danger" type="button" onclick="deleteAdminAppointment(${Number(termin.id)})">Termin löschen</button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
+        }
+
+        async function deleteAdminAppointment(terminId) {
+            const confirmed = confirm('Diesen Termin im Adminpanel wirklich löschen?');
+            if (!confirmed) return;
+
+            try {
+                await api(`/api/admin/termine/${Number(terminId)}`, { method: 'DELETE' });
+                showTaskManageAlert('Termin erfolgreich gelöscht.', 'success');
+                await refreshAppointmentsDataOnly();
+            } catch (error) {
+                showTaskManageAlert(error.message || 'Termin konnte nicht gelöscht werden.');
+            }
         }
 
         function getChatDisplayName(conversation) {

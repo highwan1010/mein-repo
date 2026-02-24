@@ -451,11 +451,122 @@ select {
     margin-bottom: 4px;
 }
 
+.appointment-picker-layout {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 12px;
+    margin-top: 4px;
+    margin-bottom: 10px;
+}
+
+.appointment-picker-layout.disabled {
+    opacity: 0.58;
+}
+
 .appointment-picker-field {
     background: linear-gradient(135deg, var(--white), var(--light));
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 10px 10px 8px;
+}
+
+.appointment-picker-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.appointment-nav-btn {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: 10px;
+}
+
+.appointment-month-label {
+    font-size: 16px;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+.appointment-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 6px;
+    color: var(--gray);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.appointment-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.appointment-day-btn {
+    border: 1px solid var(--border);
+    background: var(--white);
+    border-radius: 10px;
+    min-height: 38px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.appointment-day-btn:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+
+.appointment-day-btn.selected {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: var(--white);
+    border-color: transparent;
+}
+
+.appointment-day-btn.disabled,
+.appointment-day-btn.empty {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.appointment-time-slots {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.appointment-time-slot {
+    border: 1px solid var(--border);
+    background: var(--white);
+    border-radius: 10px;
+    min-height: 40px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.appointment-time-slot:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+
+.appointment-time-slot.selected {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: var(--white);
+}
+
+.appointment-time-slot.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .appointment-picker-field label {
@@ -560,4 +671,5 @@ select {
     .footer-content { grid-template-columns: 1fr; }
     .form-grid-2 { grid-template-columns: 1fr; }
     .job-filters { grid-template-columns: 1fr; }
+    .appointment-picker-layout { grid-template-columns: 1fr; }
 }

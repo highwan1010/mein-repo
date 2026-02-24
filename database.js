@@ -1249,6 +1249,30 @@ const deleteTerminByUser = async (terminId, userId) => {
     return deleted;
 };
 
+const deleteTerminByAdmin = async (terminId) => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `DELETE FROM termine
+             WHERE id = $1
+             RETURNING id`,
+            [Number(terminId)]
+        );
+
+        return Boolean(result.rows[0]);
+    }
+
+    const db = readDb();
+    const before = (db.termine || []).length;
+    db.termine = (db.termine || []).filter((termin) => Number(termin.id) !== Number(terminId));
+    const deleted = (db.termine || []).length < before;
+
+    if (deleted) {
+        writeDb(db);
+    }
+
+    return deleted;
+};
+
 const createChatMessage = async ({
     conversationId,
     nachricht,
@@ -1927,6 +1951,7 @@ module.exports = {
     getAllTermineAdmin,
     updateTerminByUser,
     deleteTerminByUser,
+    deleteTerminByAdmin,
     createChatMessage,
     getChatMessagesByConversation,
     getChatConversationMeta,
