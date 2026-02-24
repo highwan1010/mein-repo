@@ -221,7 +221,10 @@
                     <h1 id="welcome">Admin Panel</h1>
                     <p id="subtitle" style="color: var(--gray);">Vollständige Systemeinsicht in Vermittlungsstellen, Bewerbungen, Nutzer und Aufgaben.</p>
                 </div>
-                <button class="btn-primary" id="refreshBtn"><i class="fas fa-rotate"></i> Aktualisieren</button>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+                    <span class="badge" id="livePollingStatus">Live aktiv</span>
+                    <button class="btn-primary" id="refreshBtn"><i class="fas fa-rotate"></i> Aktualisieren</button>
+                </div>
             </div>
 
             <div class="panel-grid">
@@ -495,6 +498,7 @@
         let editingChatMessageId = null;
         let adminChatPollHandle = null;
         let activeAdminTab = 'jobs';
+        let currentLivePollState = '';
         const ADMIN_CHAT_NAME_STORAGE_KEY = 'jc_admin_chat_display_name_v1';
         let adminChatDisplayName = localStorage.getItem(ADMIN_CHAT_NAME_STORAGE_KEY) || '';
         let editContext = null;
@@ -559,6 +563,31 @@
             }
 
             return true;
+        }
+
+        function updateLivePollingStatus(state) {
+            const statusBadge = document.getElementById('livePollingStatus');
+            if (!statusBadge) return;
+
+            if (state === currentLivePollState) {
+                return;
+            }
+
+            currentLivePollState = state;
+            if (state === 'paused') {
+                statusBadge.textContent = 'Live pausiert (Bearbeitung)';
+                statusBadge.className = 'badge warning';
+                return;
+            }
+
+            if (state === 'error') {
+                statusBadge.textContent = 'Live Fehler';
+                statusBadge.className = 'badge danger';
+                return;
+            }
+
+            statusBadge.textContent = 'Live aktiv';
+            statusBadge.className = 'badge success';
         }
 
         async function api(path, options = {}) {
@@ -1438,8 +1467,10 @@
 
         document.getElementById('refreshBtn').addEventListener('click', async () => {
             try {
+                updateLivePollingStatus('active');
                 await loadAdminData();
             } catch (error) {
+                updateLivePollingStatus('error');
                 alert(error.message);
             }
         });
@@ -1539,6 +1570,7 @@
                 if (!ok) return;
                 switchAdminTab('jobs');
                 await loadAdminData();
+                updateLivePollingStatus('active');
 
                 if (adminChatPollHandle) {
                     clearInterval(adminChatPollHandle);
@@ -1547,8 +1579,11 @@
                 adminChatPollHandle = setInterval(async () => {
                     try {
                         if (isUserInteractingWithControls()) {
+                            updateLivePollingStatus('paused');
                             return;
                         }
+
+                        updateLivePollingStatus('active');
 
                         if (activeAdminTab === 'appointments') {
                             await refreshAppointmentsDataOnly();
@@ -1567,6 +1602,7 @@
                             }
                         }
                     } catch {
+                        updateLivePollingStatus('error');
                         // polling errors are ignored to keep the UI responsive
                     }
                 }, 3000);
