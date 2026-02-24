@@ -1167,9 +1167,6 @@
                                 <small>${escapeHtml(activeConversation?.visitor_email || '')}</small>
                             </div>
                         </div>
-                        <div class="chat-admin-messages" id="chatMessageList">
-                            ${renderChatMessages(activeChatMessages)}
-                        </div>
                         <div class="chat-admin-controls">
                             <select class="form-input" id="chatConversationStatus" ${activeConversation ? '' : 'disabled'}>
                                 <option value="offen" ${statusInfo.key === 'offen' ? 'selected' : ''}>Offen</option>
@@ -1187,6 +1184,9 @@
                                 <input class="form-input" id="chatAdminDisplayName" type="text" maxlength="80" placeholder="z. B. Nina vom Support" value="${escapeHtml(adminChatDisplayName)}" />
                                 <button class="btn-secondary" type="button" id="saveChatAdminNameBtn">Speichern</button>
                             </div>
+                        </div>
+                        <div class="chat-admin-messages" id="chatMessageList">
+                            ${renderChatMessages(activeChatMessages)}
                         </div>
                         <form id="chatReplyForm" class="chat-admin-form">
                             <input class="form-input" id="chatReplyInput" type="text" maxlength="1200" placeholder="${conversationBlocked ? 'Konversation ist geschlossen/erledigt' : 'Nachricht schreiben...'}" ${(activeConversation && !conversationBlocked) ? '' : 'disabled'} />
