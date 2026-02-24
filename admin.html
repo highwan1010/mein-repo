@@ -348,6 +348,10 @@
                             <input class="form-input" id="taskTitel" type="text" required />
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label for="taskSenderName">Auftrag von (Name frei wählbar)</label>
+                        <input class="form-input" id="taskSenderName" type="text" maxlength="140" placeholder="z. B. Team Vermittlung" />
+                    </div>
                     <div class="form-grid-2">
                         <div class="form-group">
                             <label for="taskStatus">Status</label>
@@ -887,6 +891,7 @@
                             <th>Bewerber</th>
                             <th>Titel</th>
                             <th>Beschreibung</th>
+                            <th>Auftrag von</th>
                             <th>Status</th>
                             <th>Fällig</th>
                             <th>Erstellt</th>
@@ -902,6 +907,7 @@
                                 <td>${escapeHtml(`${task.user_vorname || ''} ${task.user_nachname || ''}`.trim() || task.user_email || '—')}</td>
                                 <td>${escapeHtml(task.titel || '—')}</td>
                                 <td style="max-width: 340px; white-space: pre-wrap;">${escapeHtml(task.beschreibung || '—')}</td>
+                                <td>${escapeHtml(task.admin_anzeige_name || `${task.admin_vorname || ''} ${task.admin_nachname || ''}`.trim() || task.admin_email || '—')}</td>
                                 <td><span class="badge ${taskStatus.className}">${taskStatus.label}</span></td>
                                 <td>${formatDate(task.faellig_am)}</td>
                                 <td>${formatDate(task.erstellt_am)}</td>
@@ -976,7 +982,10 @@
                                 <td>${escapeHtml(termin.uhrzeit || '—')}</td>
                                 <td>${formatDate(termin.erstellt_am)}</td>
                                 <td>
-                                    <button class="btn-danger" type="button" onclick="deleteAdminAppointment(${Number(termin.id)})">Termin löschen</button>
+                                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                        <button class="btn-secondary" type="button" onclick="assignTaskFromTermin(${Number(termin.id)}, ${Number(termin.user_id)})">Aufgabe zuteilen</button>
+                                        <button class="btn-danger" type="button" onclick="deleteAdminAppointment(${Number(termin.id)})">Termin löschen</button>
+                                    </div>
                                 </td>
                             </tr>
                         `).join('')}
@@ -996,6 +1005,39 @@
             } catch (error) {
                 showTaskManageAlert(error.message || 'Termin konnte nicht gelöscht werden.');
             }
+        }
+
+        function assignTaskFromTermin(terminId, userId) {
+            const termin = adminAppointments.find((entry) => Number(entry.id) === Number(terminId));
+            if (!termin) {
+                showTaskManageAlert('Termin konnte nicht geladen werden.');
+                return;
+            }
+
+            switchAdminTab('tasks');
+
+            const userSelect = document.getElementById('taskUserId');
+            if (userSelect) {
+                userSelect.value = String(userId);
+            }
+
+            const titleInput = document.getElementById('taskTitel');
+            if (titleInput && !titleInput.value.trim()) {
+                titleInput.value = 'Vorbereitung auf Bewerbungstermin';
+            }
+
+            const dueInput = document.getElementById('taskFaelligAm');
+            if (dueInput && termin.datum) {
+                dueInput.value = String(termin.datum);
+            }
+
+            const descriptionInput = document.getElementById('taskBeschreibung');
+            if (descriptionInput && !descriptionInput.value.trim()) {
+                descriptionInput.value = `Bitte Unterlagen für den Termin am ${termin.datum || '—'} um ${termin.uhrzeit || '—'} prüfen und vorbereiten.`;
+            }
+
+            const userLabel = `${termin.user_vorname || ''} ${termin.user_nachname || ''}`.trim() || termin.user_email || 'Bewerber';
+            showTaskManageAlert(`Termin #${terminId}: Aufgabe für ${userLabel} vorbereitet. Bitte zuweisen.`, 'success');
         }
 
         function getChatDisplayName(conversation) {
@@ -1366,6 +1408,11 @@
                 localStorage.setItem(ADMIN_CHAT_NAME_STORAGE_KEY, adminChatDisplayName);
             }
 
+            const taskSenderNameInput = document.getElementById('taskSenderName');
+            if (taskSenderNameInput && !taskSenderNameInput.value.trim()) {
+                taskSenderNameInput.value = `${user.vorname || ''} ${user.nachname || ''}`.trim() || user.email || '';
+            }
+
             document.getElementById('welcome').textContent = `Admin Panel – ${user.vorname}`;
             return true;
         }
@@ -1446,6 +1493,7 @@
             const payload = {
                 userId: Number(document.getElementById('taskUserId').value),
                 titel: document.getElementById('taskTitel').value.trim(),
+                auftragVonName: document.getElementById('taskSenderName').value.trim() || null,
                 status: document.getElementById('taskStatus').value,
                 beschreibung: document.getElementById('taskBeschreibung').value.trim() || null,
                 faelligAm: document.getElementById('taskFaelligAm').value || null

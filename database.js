@@ -149,6 +149,7 @@ const initPostgres = async () => {
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            admin_anzeige_name TEXT,
             titel TEXT NOT NULL,
             beschreibung TEXT,
             status TEXT NOT NULL DEFAULT 'offen',
@@ -186,6 +187,8 @@ const initPostgres = async () => {
     `);
 
     await pgPool.query(`
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS admin_anzeige_name TEXT;
+
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS conversation_id TEXT;
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_vorname TEXT;
         ALTER TABLE chats ADD COLUMN IF NOT EXISTS visitor_nachname TEXT;
@@ -951,14 +954,16 @@ const deleteBewerbungByAdmin = async (bewerbungId) => {
 
 const createTaskByAdmin = async (adminId, userId, data) => {
     const taskStatus = String(data.status || 'offen').trim().toLowerCase();
+    const adminDisplayName = data.adminAnzeigeName ? String(data.adminAnzeigeName).trim() : null;
     if (USE_POSTGRES) {
         const result = await pgPool.query(
-            `INSERT INTO tasks (user_id, admin_id, titel, beschreibung, status, faellig_am)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO tasks (user_id, admin_id, admin_anzeige_name, titel, beschreibung, status, faellig_am)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *`,
             [
                 Number(userId),
                 Number(adminId),
+                adminDisplayName,
                 data.titel,
                 data.beschreibung || null,
                 taskStatus,
@@ -975,6 +980,7 @@ const createTaskByAdmin = async (adminId, userId, data) => {
         id,
         user_id: Number(userId),
         admin_id: Number(adminId),
+        admin_anzeige_name: adminDisplayName,
         titel: data.titel,
         beschreibung: data.beschreibung || null,
         status: taskStatus,

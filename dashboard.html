@@ -287,7 +287,7 @@
                                     <td>${escapeHtml(task.beschreibung || '—')}</td>
                                     <td><span class="badge ${task.status === 'erledigt' ? 'success' : 'warning'}">${escapeHtml(task.status || 'offen')}</span></td>
                                     <td>${task.faellig_am ? new Date(task.faellig_am).toLocaleDateString('de-DE') : '—'}</td>
-                                    <td>${escapeHtml(`${task.admin_vorname || ''} ${task.admin_nachname || ''}`.trim() || task.admin_email || '—')}</td>
+                                    <td>${escapeHtml(task.admin_anzeige_name || `${task.admin_vorname || ''} ${task.admin_nachname || ''}`.trim() || task.admin_email || '—')}</td>
                                     <td>
                                         ${task.status !== 'erledigt'
                                             ? `<button class="btn-success" onclick="markTaskDone(${task.id})">Erledigt</button>`

@@ -1353,7 +1353,7 @@ app.delete('/api/admin/termine/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/tasks', requireAdmin, async (req, res) => {
     try {
-        const { userId, titel, beschreibung, faelligAm, status } = req.body || {};
+        const { userId, titel, beschreibung, faelligAm, status, auftragVonName } = req.body || {};
 
         if (!userId || !titel) {
             return res.status(400).json({ error: 'Benutzer und Titel sind erforderlich' });
@@ -1374,11 +1374,17 @@ app.post('/api/admin/tasks', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Aufgaben können nur an Bewerber zugeteilt werden' });
         }
 
+        const normalizedSenderName = auftragVonName ? String(auftragVonName).trim() : '';
+        if (normalizedSenderName.length > 140) {
+            return res.status(400).json({ error: 'Auftraggeber-Name ist zu lang' });
+        }
+
         const task = await createTaskByAdmin(req.currentAdmin.id, userId, {
             titel: String(titel).trim(),
             beschreibung: beschreibung ? String(beschreibung).trim() : '',
             faelligAm: faelligAm || null,
-            status: normalizedStatus
+            status: normalizedStatus,
+            adminAnzeigeName: normalizedSenderName || null
         });
 
         res.json({ success: true, task });
