@@ -66,7 +66,7 @@
                 <div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap;">
                     <button class="btn-primary" onclick="window.location.href='jobs.html'">Zu den Jobs</button>
                     <button class="btn-secondary" onclick="window.location.href='register.html'">Kostenlos registrieren</button>
-                    <button class="btn-secondary" onclick="document.getElementById('bewerbungstermine').scrollIntoView({ behavior: 'smooth' })">Jetzt bewerben</button>
+                    <button class="btn-secondary" onclick="window.location.hash='bewerbungstermine'">Jetzt bewerben</button>
                 </div>
             </div>
 
@@ -83,7 +83,7 @@
         </div>
     </section>
 
-    <section class="jobs-section" id="bewerbungstermine">
+    <section class="jobs-section" id="bewerbungstermine" style="display:none;">
         <div class="container">
             <div class="section-header">
                 <h2>Jetzt bewerben</h2>
@@ -288,6 +288,24 @@
         let selectedAppointmentTime = '09:00';
         let bookedSlotKeys = new Set();
         let bookedDateKeys = new Set();
+
+        function isBewerbungstermineActive() {
+            return String(window.location.hash || '').trim().toLowerCase() === '#bewerbungstermine';
+        }
+
+        function updateBewerbungstermineVisibility() {
+            const section = document.getElementById('bewerbungstermine');
+            if (!section) return;
+
+            const shouldShow = isBewerbungstermineActive();
+            section.style.display = shouldShow ? '' : 'none';
+
+            if (shouldShow) {
+                setTimeout(() => {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 20);
+            }
+        }
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -684,6 +702,8 @@
 
         // Init
         initializeAppointmentPicker();
+        updateBewerbungstermineVisibility();
+        window.addEventListener('hashchange', updateBewerbungstermineVisibility);
         updateNavForSession();
     </script>
     <script src="chat-widget.js"></script>
