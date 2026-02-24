@@ -7,6 +7,13 @@ const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 
+let nodemailer = null;
+try {
+    nodemailer = require('nodemailer');
+} catch {
+    nodemailer = null;
+}
+
 let connectPgSimpleFactory = null;
 try {
     connectPgSimpleFactory = require('connect-pg-simple');
@@ -339,6 +346,67 @@ const loginRateLimiter = rateLimit({
 });
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NOTIFICATION_EMAIL = String(process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+const SMTP_HOST = String(process.env.SMTP_HOST || '').trim();
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_USER = String(process.env.SMTP_USER || '').trim();
+const SMTP_PASS = String(process.env.SMTP_PASS || '').trim();
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').trim().toLowerCase() === 'true';
+const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || '').trim();
+
+const isEmailNotificationConfigured = Boolean(
+    nodemailer
+    && NOTIFICATION_EMAIL
+    && SMTP_HOST
+    && SMTP_PORT
+    && SMTP_USER
+    && SMTP_PASS
+    && SMTP_FROM
+);
+
+let notificationMailer = null;
+const getNotificationMailer = () => {
+    if (!isEmailNotificationConfigured) {
+        return null;
+    }
+
+    if (!notificationMailer) {
+        notificationMailer = nodemailer.createTransport({
+            host: SMTP_HOST,
+            port: SMTP_PORT,
+            secure: SMTP_SECURE,
+            auth: {
+                user: SMTP_USER,
+                pass: SMTP_PASS
+            }
+        });
+    }
+
+    return notificationMailer;
+};
+
+const sendNotificationEmail = async ({ subject, lines }) => {
+    const mailer = getNotificationMailer();
+    if (!mailer) {
+        return false;
+    }
+
+    const text = Array.isArray(lines) ? lines.filter(Boolean).join('\n') : String(lines || '');
+    await mailer.sendMail({
+        from: SMTP_FROM,
+        to: NOTIFICATION_EMAIL,
+        subject: String(subject || 'Neue Benachrichtigung'),
+        text
+    });
+
+    return true;
+};
+
+const queueNotificationEmail = (payload) => {
+    sendNotificationEmail(payload).catch((error) => {
+        console.error('E-Mail-Benachrichtigung fehlgeschlagen:', error.message || error);
+    });
+};
 
 const normalizeConversationId = (value) => {
     const text = String(value || '').trim();
@@ -899,6 +967,18 @@ app.post('/api/termine', requireAuth, async (req, res) => {
             terminZeit: terminZeit.toISOString()
         });
 
+        queueNotificationEmail({
+            subject: 'Neuer Bewerbungstermin gebucht',
+            lines: [
+                'Ein neuer Bewerbungstermin wurde gebucht.',
+                `Name: ${name}`,
+                `E-Mail: ${email}`,
+                `Datum: ${datum}`,
+                `Uhrzeit: ${uhrzeit}`,
+                `User-ID: ${req.authUserId}`
+            ]
+        });
+
         res.json({ success: true, termin });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Fehler beim Buchen des Termins' });
@@ -1096,6 +1176,8 @@ app.post('/api/chat/messages', async (req, res) => {
             req.session.chatIdentity = identity;
         }
 
+        const isNewConversation = !currentConversationMeta;
+
         const message = await createChatMessage({
             conversationId,
             nachricht: text,
@@ -1108,6 +1190,20 @@ app.post('/api/chat/messages', async (req, res) => {
             visitorNachname: identity.nachname,
             visitorEmail: identity.email
         });
+
+        if (isNewConversation) {
+            queueNotificationEmail({
+                subject: 'Neuer Livechat gestartet',
+                lines: [
+                    'Ein neuer Livechat wurde gestartet.',
+                    `Konversations-ID: ${conversationId}`,
+                    `Name: ${identity.vorname} ${identity.nachname}`,
+                    `E-Mail: ${identity.email}`,
+                    `Erste Nachricht: ${text}`
+                ]
+            });
+        }
+
         res.json({ success: true, message });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Senden der Nachricht' });

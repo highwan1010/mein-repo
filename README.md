@@ -102,6 +102,20 @@ Erforderliche ENV-Variablen für Online-Betrieb:
 - `ADMIN_EMAIL` (z. B. `admin@admin.admin`)
 - `ADMIN_PASSWORD` (z. B. `123456`)
 
+Optionale ENV-Variablen für Benachrichtigungs-E-Mails (neuer Termin / neuer Chat-Start):
+
+- `NOTIFY_EMAIL` (Empfängeradresse für Benachrichtigungen)
+- `SMTP_HOST` (z. B. `smtp.gmail.com`)
+- `SMTP_PORT` (z. B. `587`)
+- `SMTP_SECURE` (`true` für SSL/465, sonst `false`)
+- `SMTP_USER` (SMTP-Benutzer)
+- `SMTP_PASS` (SMTP-Passwort oder App-Passwort)
+- `SMTP_FROM` (Absenderadresse; optional, sonst `SMTP_USER`)
+
+Hinweis:
+
+- Wenn diese Variablen nicht gesetzt sind, läuft die App normal weiter und überspringt E-Mail-Benachrichtigungen.
+
 Wichtig:
 
 - In `production` startet die App absichtlich **nicht**, wenn keine `DATABASE_URL`/`POSTGRES_URL` gesetzt ist.
