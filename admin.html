@@ -494,6 +494,7 @@
         let activeChatConversationMeta = null;
         let editingChatMessageId = null;
         let adminChatPollHandle = null;
+        let activeAdminTab = 'jobs';
         const ADMIN_CHAT_NAME_STORAGE_KEY = 'jc_admin_chat_display_name_v1';
         let adminChatDisplayName = localStorage.getItem(ADMIN_CHAT_NAME_STORAGE_KEY) || '';
         let editContext = null;
@@ -525,6 +526,8 @@
         }
 
         function switchAdminTab(tabName) {
+            activeAdminTab = String(tabName || 'jobs');
+
             const sections = document.querySelectorAll('.admin-tab-section');
             sections.forEach((section) => {
                 section.style.display = section.dataset.tab === tabName ? '' : 'none';
@@ -540,6 +543,22 @@
                     // ignore tab-switch refresh errors
                 });
             }
+        }
+
+        function isUserInteractingWithControls() {
+            const activeElement = document.activeElement;
+            if (!activeElement) return false;
+
+            const tagName = String(activeElement.tagName || '').toUpperCase();
+            if (!['SELECT', 'INPUT', 'TEXTAREA'].includes(tagName)) {
+                return false;
+            }
+
+            if (activeElement.id === 'chatReplyInput') {
+                return true;
+            }
+
+            return true;
         }
 
         async function api(path, options = {}) {
@@ -1527,16 +1546,25 @@
 
                 adminChatPollHandle = setInterval(async () => {
                     try {
-                        await refreshAppointmentsDataOnly();
-                        await refreshChatDataOnly();
-                        if (activeChatConversationId) {
-                            await refreshActiveConversationMessages();
+                        if (isUserInteractingWithControls()) {
+                            return;
                         }
 
-                        const chatsTable = document.getElementById('chatsTable');
-                        if (chatsTable) {
-                            chatsTable.innerHTML = renderChats();
-                            bindChatReplyForm();
+                        if (activeAdminTab === 'appointments') {
+                            await refreshAppointmentsDataOnly();
+                        }
+
+                        if (activeAdminTab === 'chats') {
+                            await refreshChatDataOnly();
+                            if (activeChatConversationId) {
+                                await refreshActiveConversationMessages();
+                            }
+
+                            const chatsTable = document.getElementById('chatsTable');
+                            if (chatsTable) {
+                                chatsTable.innerHTML = renderChats();
+                                bindChatReplyForm();
+                            }
                         }
                     } catch {
                         // polling errors are ignored to keep the UI responsive
