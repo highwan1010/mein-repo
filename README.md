@@ -102,19 +102,10 @@ Erforderliche ENV-Variablen für Online-Betrieb:
 - `ADMIN_EMAIL` (z. B. `admin@admin.admin`)
 - `ADMIN_PASSWORD` (z. B. `123456`)
 
-Optionale ENV-Variablen für Benachrichtigungs-E-Mails (neuer Termin / neuer Chat-Start):
+Optionale ENV-Variablen für Telegram-Benachrichtigungen bei neuer Terminbuchung:
 
-- `NOTIFY_EMAIL` (Empfängeradresse für Benachrichtigungen)
-- `SMTP_HOST` (z. B. `smtp.gmail.com`)
-- `SMTP_PORT` (z. B. `587`)
-- `SMTP_SECURE` (`true` für SSL/465, sonst `false`)
-- `SMTP_USER` (SMTP-Benutzer)
-- `SMTP_PASS` (SMTP-Passwort oder App-Passwort)
-- `SMTP_FROM` (Absenderadresse; optional, sonst `SMTP_USER`)
-
-Hinweis:
-
-- Wenn diese Variablen nicht gesetzt sind, läuft die App normal weiter und überspringt E-Mail-Benachrichtigungen.
+- `TELEGRAM_BOT_TOKEN` (Bot-Token von BotFather)
+- `TELEGRAM_CHAT_ID` (Chat-ID des Empfänger-Chats oder der Gruppe)
 
 Wichtig:
 
@@ -147,3 +138,28 @@ Externe API-Domain festlegen:
 
 - In `config.js` den Wert `API_BASE_URL` setzen, z. B. `https://deine-backend-domain.com`.
 - Bei leerem Wert (`''`) nutzt das Frontend automatisch die aktuelle Domain (same-origin).
+
+## Telegram einrichten (Termin-Benachrichtigung)
+
+1. In Telegram den Bot `@BotFather` öffnen.
+2. Mit `/newbot` einen Bot erstellen und den Token kopieren.
+3. Deinen Bot einmal starten (im Bot-Chat auf **Start** klicken oder `/start` senden).
+4. Chat-ID ermitteln:
+	- URL aufrufen: `https://api.telegram.org/bot<DEIN_BOT_TOKEN>/getUpdates`
+	- In der Antwort die `chat.id` verwenden.
+5. ENV setzen:
+	- `TELEGRAM_BOT_TOKEN=<DEIN_BOT_TOKEN>`
+	- `TELEGRAM_CHAT_ID=<DEINE_CHAT_ID>`
+6. Lokal im Projekt eine Datei `.env` anlegen (oder `.env.example` kopieren) und die Werte eintragen.
+7. Server neu starten.
+
+Beispiel `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=<DEIN_BOT_TOKEN>
+TELEGRAM_CHAT_ID=8557639051
+```
+
+Hinweis:
+
+- Wenn `TELEGRAM_BOT_TOKEN` oder `TELEGRAM_CHAT_ID` fehlen, läuft die App normal ohne Telegram-Benachrichtigung weiter.
