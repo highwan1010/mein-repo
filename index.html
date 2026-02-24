@@ -267,13 +267,26 @@
         const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
-        const APPOINTMENT_TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+        const APPOINTMENT_TIME_SLOTS = [
+            '08:00', '08:30',
+            '09:00', '09:30',
+            '10:00', '10:30',
+            '11:00', '11:30',
+            '12:00', '12:30',
+            '13:00', '13:30',
+            '14:00', '14:30',
+            '15:00', '15:30',
+            '16:00', '16:30',
+            '17:00', '17:30'
+        ];
 
         let currentSessionUser = null;
         let appointmentPickerEnabled = false;
         let appointmentCalendarDate = new Date();
         let selectedAppointmentDate = '';
         let selectedAppointmentTime = '09:00';
+        let bookedSlotKeys = new Set();
+        let bookedDateKeys = new Set();
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -311,6 +324,31 @@
             if (timeInput) timeInput.value = selectedAppointmentTime;
         }
 
+        function makeSlotKey(dateValue, timeValue) {
+            return `${String(dateValue || '').trim()}|${String(timeValue || '').trim()}`;
+        }
+
+        function isSlotBooked(dateValue, timeValue) {
+            return bookedSlotKeys.has(makeSlotKey(dateValue, timeValue));
+        }
+
+        function getFirstAvailableTimeForDate(dateValue) {
+            return APPOINTMENT_TIME_SLOTS.find((timeValue) => !isSlotBooked(dateValue, timeValue)) || '';
+        }
+
+        function ensureSelectedTimeIsAvailable() {
+            if (!selectedAppointmentDate) {
+                return;
+            }
+
+            if (!isSlotBooked(selectedAppointmentDate, selectedAppointmentTime)) {
+                return;
+            }
+
+            selectedAppointmentTime = getFirstAvailableTimeForDate(selectedAppointmentDate) || '';
+            applyAppointmentSelection();
+        }
+
         function changeAppointmentMonth(delta) {
             appointmentCalendarDate = new Date(appointmentCalendarDate.getFullYear(), appointmentCalendarDate.getMonth() + Number(delta), 1);
             renderAppointmentCalendar();
@@ -318,8 +356,10 @@
 
         function selectAppointmentDate(dateValue) {
             selectedAppointmentDate = dateValue;
+            ensureSelectedTimeIsAvailable();
             applyAppointmentSelection();
             renderAppointmentCalendar();
+            renderAppointmentTimeSlots();
         }
 
         function selectAppointmentTime(timeValue) {
@@ -352,8 +392,10 @@
                 const dateValue = toDateInputValue(current);
                 const isPast = dateValue < todayValue;
                 const isSelected = dateValue === selectedAppointmentDate;
+                const hasBooked = bookedDateKeys.has(dateValue);
                 const classNames = ['appointment-day-btn'];
                 if (isSelected) classNames.push('selected');
+                if (hasBooked) classNames.push('has-booking');
                 if (isPast || !appointmentPickerEnabled) classNames.push('disabled');
 
                 cells.push(`
@@ -362,7 +404,7 @@
                         type="button"
                         ${isPast || !appointmentPickerEnabled ? 'disabled' : ''}
                         onclick="selectAppointmentDate('${dateValue}')"
-                    >${day}</button>
+                    ><span class="appointment-day-number">${day}</span>${hasBooked ? '<span class="appointment-day-note">gebucht</span>' : ''}</button>
                 `);
             }
 
@@ -373,20 +415,44 @@
             const slots = document.getElementById('appointmentTimeSlots');
             if (!slots) return;
 
+            ensureSelectedTimeIsAvailable();
+
             slots.innerHTML = APPOINTMENT_TIME_SLOTS.map((timeValue) => {
+                const slotBooked = isSlotBooked(selectedAppointmentDate, timeValue);
                 const classNames = ['appointment-time-slot'];
                 if (timeValue === selectedAppointmentTime) classNames.push('selected');
-                if (!appointmentPickerEnabled) classNames.push('disabled');
+                if (!appointmentPickerEnabled || slotBooked) classNames.push('disabled');
+                if (slotBooked) classNames.push('booked');
 
                 return `
                     <button
                         class="${classNames.join(' ')}"
                         type="button"
-                        ${appointmentPickerEnabled ? '' : 'disabled'}
+                        ${appointmentPickerEnabled && !slotBooked ? '' : 'disabled'}
                         onclick="selectAppointmentTime('${timeValue}')"
-                    >${timeValue}</button>
+                    >${timeValue}${slotBooked ? ' · gebucht' : ''}</button>
                 `;
             }).join('');
+        }
+
+        async function loadBookedAppointmentSlots() {
+            const response = await api('/api/termine/belegt');
+            const entries = response.termine || [];
+
+            bookedSlotKeys = new Set();
+            bookedDateKeys = new Set();
+
+            for (const entry of entries) {
+                const datum = String(entry.datum || '').trim();
+                const uhrzeit = String(entry.uhrzeit || '').trim();
+                if (!datum || !uhrzeit) continue;
+                bookedDateKeys.add(datum);
+                bookedSlotKeys.add(makeSlotKey(datum, uhrzeit));
+            }
+
+            ensureSelectedTimeIsAvailable();
+            renderAppointmentCalendar();
+            renderAppointmentTimeSlots();
         }
 
         function initializeAppointmentPicker() {
@@ -466,7 +532,7 @@
                                     <td>${escapeHtml(termin.name || '—')}</td>
                                     <td>${escapeHtml(termin.email || '—')}</td>
                                     <td><input class="form-input" id="terminDate-${Number(termin.id)}" type="date" value="${escapeHtml(termin.datum || '')}" /></td>
-                                    <td><input class="form-input" id="terminTime-${Number(termin.id)}" type="time" value="${escapeHtml(termin.uhrzeit || '')}" /></td>
+                                    <td><input class="form-input" id="terminTime-${Number(termin.id)}" type="time" step="1800" value="${escapeHtml(termin.uhrzeit || '')}" /></td>
                                     <td>${termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleString('de-DE') : '—'}</td>
                                     <td>
                                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -509,6 +575,7 @@
                 });
 
                 showAppointmentsPublicAlert('Termin erfolgreich verschoben.', 'success');
+                await loadBookedAppointmentSlots();
                 await loadPublicAppointments();
             } catch (error) {
                 showAppointmentsPublicAlert(error.message || 'Termin konnte nicht verschoben werden.');
@@ -522,6 +589,7 @@
             try {
                 await api(`/api/termine/${Number(terminId)}`, { method: 'DELETE' });
                 showAppointmentsPublicAlert('Termin wurde abgebrochen.', 'success');
+                await loadBookedAppointmentSlots();
                 await loadPublicAppointments();
             } catch (error) {
                 showAppointmentsPublicAlert(error.message || 'Termin konnte nicht abgebrochen werden.');
@@ -571,6 +639,7 @@
 
                 currentSessionUser = currentUser;
                 setAppointmentsAvailability(true);
+                await loadBookedAppointmentSlots();
 
                 if (currentUser) {
                     const fullName = `${currentUser.vorname || ''} ${currentUser.nachname || ''}`.trim();
@@ -605,6 +674,7 @@
                 showAppointmentsPublicAlert('Termin erfolgreich gebucht.', 'success');
                 document.getElementById('appointmentsPublicDate').value = '';
                 document.getElementById('appointmentsPublicTime').value = '';
+                await loadBookedAppointmentSlots();
                 await loadPublicAppointments();
             } catch (error) {
                 showAppointmentsPublicAlert(error.message || 'Termin konnte nicht gebucht werden.');

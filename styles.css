@@ -512,10 +512,27 @@ select {
     border: 1px solid var(--border);
     background: var(--white);
     border-radius: 10px;
-    min-height: 38px;
+    min-height: 44px;
     font-weight: 700;
     cursor: pointer;
     transition: 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+}
+
+.appointment-day-number {
+    line-height: 1;
+}
+
+.appointment-day-note {
+    font-size: 10px;
+    line-height: 1;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .appointment-day-btn:hover {
@@ -523,10 +540,19 @@ select {
     transform: translateY(-1px);
 }
 
+.appointment-day-btn.has-booking {
+    border-color: var(--accent);
+    background: var(--light);
+}
+
 .appointment-day-btn.selected {
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: var(--white);
     border-color: transparent;
+}
+
+.appointment-day-btn.selected .appointment-day-note {
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .appointment-day-btn.disabled,
@@ -561,6 +587,12 @@ select {
     border-color: transparent;
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: var(--white);
+}
+
+.appointment-time-slot.booked {
+    border-color: var(--accent);
+    background: var(--light);
+    color: var(--dark);
 }
 
 .appointment-time-slot.disabled {

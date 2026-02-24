@@ -1192,6 +1192,69 @@ const getAllTermineAdmin = async () => {
         });
 };
 
+const getBookedTerminSlots = async () => {
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT datum, uhrzeit, COUNT(*)::INT AS anzahl
+             FROM termine
+             GROUP BY datum, uhrzeit
+             ORDER BY datum ASC, uhrzeit ASC`
+        );
+
+        return result.rows;
+    }
+
+    const db = readDb();
+    const grouped = new Map();
+
+    for (const termin of (db.termine || [])) {
+        const key = `${String(termin.datum || '').trim()}|${String(termin.uhrzeit || '').trim()}`;
+        if (!grouped.has(key)) {
+            grouped.set(key, { datum: String(termin.datum || '').trim(), uhrzeit: String(termin.uhrzeit || '').trim(), anzahl: 0 });
+        }
+
+        const entry = grouped.get(key);
+        entry.anzahl += 1;
+    }
+
+    return Array.from(grouped.values())
+        .filter((entry) => entry.datum && entry.uhrzeit)
+        .sort((left, right) => {
+            const leftKey = `${left.datum} ${left.uhrzeit}`;
+            const rightKey = `${right.datum} ${right.uhrzeit}`;
+            return leftKey.localeCompare(rightKey, 'de');
+        });
+};
+
+const isTerminSlotOccupied = async ({ datum, uhrzeit, excludeTerminId = null }) => {
+    const normalizedDate = String(datum || '').trim();
+    const normalizedTime = String(uhrzeit || '').trim();
+    const excludedId = excludeTerminId === null || excludeTerminId === undefined
+        ? null
+        : Number(excludeTerminId);
+
+    if (USE_POSTGRES) {
+        const result = await pgPool.query(
+            `SELECT COUNT(*)::INT AS count
+             FROM termine
+             WHERE datum = $1
+               AND uhrzeit = $2
+               AND ($3::INT IS NULL OR id <> $3)`,
+            [normalizedDate, normalizedTime, excludedId]
+        );
+
+        return Number(result.rows[0]?.count || 0) > 0;
+    }
+
+    const db = readDb();
+    return (db.termine || []).some((termin) => {
+        const sameDate = String(termin.datum || '').trim() === normalizedDate;
+        const sameTime = String(termin.uhrzeit || '').trim() === normalizedTime;
+        const isExcluded = excludedId !== null && Number(termin.id) === excludedId;
+        return sameDate && sameTime && !isExcluded;
+    });
+};
+
 const updateTerminByUser = async (terminId, userId, data) => {
     const normalizedDate = String(data.datum || '').trim();
     const normalizedTime = String(data.uhrzeit || '').trim();
@@ -1955,6 +2018,8 @@ module.exports = {
     createTerminByBewerber,
     getTermineByUser,
     getAllTermineAdmin,
+    getBookedTerminSlots,
+    isTerminSlotOccupied,
     updateTerminByUser,
     deleteTerminByUser,
     deleteTerminByAdmin,

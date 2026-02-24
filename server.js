@@ -46,6 +46,8 @@ const {
     createTerminByBewerber,
     getTermineByUser,
     getAllTermineAdmin,
+    getBookedTerminSlots,
+    isTerminSlotOccupied,
     updateTerminByUser,
     deleteTerminByUser,
     deleteTerminByAdmin,
@@ -821,12 +823,38 @@ app.patch('/api/tasks/:id/status', requireAuth, async (req, res) => {
 
 // ===== TERMIN ROUTES =====
 
+function isValidThirtyMinuteTimeSlot(timeValue) {
+    if (!/^\d{2}:\d{2}$/.test(timeValue)) {
+        return false;
+    }
+
+    const [hours, minutes] = timeValue.split(':').map((entry) => Number(entry));
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+        return false;
+    }
+
+    if (hours < 0 || hours > 23) {
+        return false;
+    }
+
+    return minutes === 0 || minutes === 30;
+}
+
 app.get('/api/termine', requireAuth, async (req, res) => {
     try {
         const termine = await getTermineByUser(req.authUserId);
         res.json({ success: true, termine });
     } catch (error) {
         res.status(500).json({ error: 'Fehler beim Laden der Termine' });
+    }
+});
+
+app.get('/api/termine/belegt', requireAuth, async (req, res) => {
+    try {
+        const termine = await getBookedTerminSlots();
+        res.json({ success: true, termine });
+    } catch (error) {
+        res.status(500).json({ error: 'Fehler beim Laden der belegten Termine' });
     }
 });
 
@@ -849,8 +877,13 @@ app.post('/api/termine', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Ungültiges Datum' });
         }
 
-        if (!/^\d{2}:\d{2}$/.test(uhrzeit)) {
-            return res.status(400).json({ error: 'Ungültige Uhrzeit' });
+        if (!isValidThirtyMinuteTimeSlot(uhrzeit)) {
+            return res.status(400).json({ error: 'Ungültige Uhrzeit. Es sind nur 30-Minuten-Slots erlaubt.' });
+        }
+
+        const isOccupied = await isTerminSlotOccupied({ datum, uhrzeit });
+        if (isOccupied) {
+            return res.status(409).json({ error: 'Dieser Termin-Slot ist bereits gebucht.' });
         }
 
         const terminZeit = new Date(`${datum}T${uhrzeit}:00`);
@@ -890,8 +923,17 @@ app.patch('/api/termine/:id', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Ungültiges Datum' });
         }
 
-        if (!/^\d{2}:\d{2}$/.test(uhrzeit)) {
-            return res.status(400).json({ error: 'Ungültige Uhrzeit' });
+        if (!isValidThirtyMinuteTimeSlot(uhrzeit)) {
+            return res.status(400).json({ error: 'Ungültige Uhrzeit. Es sind nur 30-Minuten-Slots erlaubt.' });
+        }
+
+        const isOccupied = await isTerminSlotOccupied({
+            datum,
+            uhrzeit,
+            excludeTerminId: terminId
+        });
+        if (isOccupied) {
+            return res.status(409).json({ error: 'Dieser Termin-Slot ist bereits gebucht.' });
         }
 
         const terminZeit = new Date(`${datum}T${uhrzeit}:00`);
