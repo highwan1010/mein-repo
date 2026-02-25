@@ -261,7 +261,7 @@
                     <button class="btn-secondary admin-tab-btn" data-tab="users" type="button" onclick="switchAdminTab('users')">Benutzer</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="tasks" type="button" onclick="switchAdminTab('tasks')">Aufgaben</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="appointments" type="button" onclick="switchAdminTab('appointments')">Termine</button>
-                    <button class="btn-secondary admin-tab-btn" data-tab="chats" type="button" onclick="switchAdminTab('chats')">Livechats</button>
+                    <button class="btn-secondary admin-tab-btn" data-tab="chats" type="button" onclick="switchAdminTab('chats')">Nachrichten</button>
                 </div>
             </div>
 
@@ -422,7 +422,7 @@
             </section>
 
             <section class="card admin-tab-section" data-tab="chats" style="display:none;">
-                <h2 style="margin-bottom: 10px;">Livechats</h2>
+                <h2 style="margin-bottom: 10px;">Nachrichten von Nutzern</h2>
                 <div id="chatsTable">Lade Daten...</div>
             </section>
         </div>
@@ -530,6 +530,7 @@
         let adminChatPollHandle = null;
         let activeAdminTab = 'jobs';
         let currentLivePollState = '';
+        const ADMIN_LAST_TAB_STORAGE_KEY = 'jc_admin_last_tab_v1';
         const ADMIN_CHAT_NAME_STORAGE_KEY = 'jc_admin_chat_display_name_v1';
         let adminChatDisplayName = localStorage.getItem(ADMIN_CHAT_NAME_STORAGE_KEY) || '';
         let editContext = null;
@@ -562,6 +563,7 @@
 
         function switchAdminTab(tabName) {
             activeAdminTab = String(tabName || 'jobs');
+            localStorage.setItem(ADMIN_LAST_TAB_STORAGE_KEY, activeAdminTab);
 
             const sections = document.querySelectorAll('.admin-tab-section');
             sections.forEach((section) => {
@@ -578,6 +580,23 @@
                     // ignore tab-switch refresh errors
                 });
             }
+        }
+
+        function getInitialAdminTab() {
+            const params = new URLSearchParams(window.location.search);
+            const fromQuery = String(params.get('tab') || '').trim().toLowerCase();
+            const allowedTabs = new Set(['jobs', 'users', 'tasks', 'appointments', 'chats', 'statistik']);
+
+            if (allowedTabs.has(fromQuery)) {
+                return fromQuery;
+            }
+
+            const fromStorage = String(localStorage.getItem(ADMIN_LAST_TAB_STORAGE_KEY) || '').trim().toLowerCase();
+            if (allowedTabs.has(fromStorage)) {
+                return fromStorage;
+            }
+
+            return 'jobs';
         }
 
         function isUserInteractingWithControls() {
@@ -1602,7 +1621,7 @@
             try {
                 const ok = await ensureAdmin();
                 if (!ok) return;
-                switchAdminTab('jobs');
+                switchAdminTab(getInitialAdminTab());
                 await loadAdminData();
                 updateLivePollingStatus('active');
 
