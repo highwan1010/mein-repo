@@ -261,6 +261,7 @@
                     <button class="btn-secondary admin-tab-btn" data-tab="users" type="button" onclick="switchAdminTab('users')">Benutzer</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="tasks" type="button" onclick="switchAdminTab('tasks')">Aufgaben</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="appointments" type="button" onclick="switchAdminTab('appointments')">Termine</button>
+                    <button class="btn-secondary admin-tab-btn" data-tab="livechats" type="button" onclick="switchAdminTab('livechats')">Livechat</button>
                     <button class="btn-secondary admin-tab-btn" data-tab="chats" type="button" onclick="switchAdminTab('chats')">Nachrichten</button>
                 </div>
             </div>
@@ -422,7 +423,7 @@
             </section>
 
             <section class="card admin-tab-section" data-tab="chats" style="display:none;">
-                <h2 style="margin-bottom: 10px;">Nachrichten von Nutzern</h2>
+                <h2 style="margin-bottom: 10px;" id="chatSectionTitle">Nachrichten von Nutzern</h2>
                 <div id="chatsTable">Lade Daten...</div>
             </section>
         </div>
@@ -522,8 +523,13 @@
         let adminUsers = [];
         let adminJobs = [];
         let adminAppointments = [];
-        let adminChatThreads = [];
-        let activeChatConversationId = '';
+        let adminLiveChatThreads = [];
+        let adminMessageThreads = [];
+        let activeChatScope = 'chats';
+        const activeChatConversationIds = {
+            livechats: '',
+            chats: ''
+        };
         let activeChatMessages = [];
         let activeChatConversationMeta = null;
         let editingChatMessageId = null;
@@ -534,6 +540,30 @@
         const ADMIN_CHAT_NAME_STORAGE_KEY = 'jc_admin_chat_display_name_v1';
         let adminChatDisplayName = localStorage.getItem(ADMIN_CHAT_NAME_STORAGE_KEY) || '';
         let editContext = null;
+
+        function getChatScopeFromTab(tabName) {
+            return String(tabName || '') === 'livechats' ? 'livechats' : 'chats';
+        }
+
+        function getChatThreadsByScope(scope) {
+            return scope === 'livechats' ? adminLiveChatThreads : adminMessageThreads;
+        }
+
+        function getActiveChatConversationId() {
+            return String(activeChatConversationIds[activeChatScope] || '');
+        }
+
+        function setActiveChatConversationId(conversationId) {
+            activeChatConversationIds[activeChatScope] = String(conversationId || '');
+        }
+
+        function updateChatSectionHeading() {
+            const heading = document.getElementById('chatSectionTitle');
+            if (!heading) return;
+            heading.textContent = activeChatScope === 'livechats'
+                ? 'Livechat (Website-Widget)'
+                : 'Nachrichten von Nutzern (Dashboard)';
+        }
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -563,11 +593,16 @@
 
         function switchAdminTab(tabName) {
             activeAdminTab = String(tabName || 'jobs');
+            if (activeAdminTab === 'livechats' || activeAdminTab === 'chats') {
+                activeChatScope = getChatScopeFromTab(activeAdminTab);
+                updateChatSectionHeading();
+            }
             localStorage.setItem(ADMIN_LAST_TAB_STORAGE_KEY, activeAdminTab);
 
             const sections = document.querySelectorAll('.admin-tab-section');
             sections.forEach((section) => {
-                section.style.display = section.dataset.tab === tabName ? '' : 'none';
+                const isChatSectionAlias = activeAdminTab === 'livechats' && section.dataset.tab === 'chats';
+                section.style.display = (section.dataset.tab === activeAdminTab || isChatSectionAlias) ? '' : 'none';
             });
 
             const buttons = document.querySelectorAll('.admin-tab-btn');
@@ -580,12 +615,20 @@
                     // ignore tab-switch refresh errors
                 });
             }
+
+            if (tabName === 'livechats' || tabName === 'chats') {
+                const chatsTable = document.getElementById('chatsTable');
+                if (chatsTable) {
+                    chatsTable.innerHTML = renderChats();
+                    bindChatReplyForm();
+                }
+            }
         }
 
         function getInitialAdminTab() {
             const params = new URLSearchParams(window.location.search);
             const fromQuery = String(params.get('tab') || '').trim().toLowerCase();
-            const allowedTabs = new Set(['jobs', 'users', 'tasks', 'appointments', 'chats', 'statistik']);
+            const allowedTabs = new Set(['jobs', 'users', 'tasks', 'appointments', 'chats', 'livechats', 'statistik']);
 
             if (allowedTabs.has(fromQuery)) {
                 return fromQuery;
@@ -1144,12 +1187,18 @@
         }
 
         function renderChatThreads() {
-            if (!adminChatThreads.length) {
-                return '<div class="empty-state"><i class="fas fa-comments"></i><p>Keine Livechats vorhanden.</p></div>';
+            const scopedThreads = getChatThreadsByScope(activeChatScope);
+            const activeConversationId = getActiveChatConversationId();
+
+            if (!scopedThreads.length) {
+                const emptyText = activeChatScope === 'livechats'
+                    ? 'Keine Livechats vorhanden.'
+                    : 'Keine Nachrichten von Nutzern vorhanden.';
+                return `<div class="empty-state"><i class="fas fa-comments"></i><p>${escapeHtml(emptyText)}</p></div>`;
             }
 
-            return adminChatThreads.map((conversation) => {
-                const active = String(conversation.conversation_id) === String(activeChatConversationId);
+            return scopedThreads.map((conversation) => {
+                const active = String(conversation.conversation_id) === String(activeConversationId);
                 const senderLabel = conversation.letzte_nachricht_von_admin
                     ? (conversation.letzte_admin_anzeige_name || adminChatDisplayName || 'Admin')
                     : getChatDisplayName(conversation);
@@ -1192,8 +1241,11 @@
         }
 
         function renderChats() {
-            const activeConversation = adminChatThreads.find(
-                (conversation) => String(conversation.conversation_id) === String(activeChatConversationId)
+            const scopedThreads = getChatThreadsByScope(activeChatScope);
+            const activeConversationId = getActiveChatConversationId();
+
+            const activeConversation = scopedThreads.find(
+                (conversation) => String(conversation.conversation_id) === String(activeConversationId)
             );
             const conversationTitle = activeConversation ? getChatDisplayName(activeConversation) : 'Konversation auswählen';
             const submitLabel = editingChatMessageId ? 'Änderung speichern' : 'Antwort senden';
@@ -1247,7 +1299,7 @@
         }
 
         async function openAdminConversation(conversationId) {
-            activeChatConversationId = String(conversationId || '');
+            setActiveChatConversationId(conversationId);
             editingChatMessageId = null;
             await refreshActiveConversationMessages();
             document.getElementById('chatsTable').innerHTML = renderChats();
@@ -1259,42 +1311,46 @@
         }
 
         async function refreshActiveConversationMessages() {
-            if (!activeChatConversationId) {
+            const activeConversationId = getActiveChatConversationId();
+            if (!activeConversationId) {
                 activeChatMessages = [];
                 activeChatConversationMeta = null;
                 return;
             }
 
-            const result = await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/messages`);
+            const result = await api(`/api/admin/chats/${encodeURIComponent(activeConversationId)}/messages`);
             activeChatMessages = result.messages || [];
             activeChatConversationMeta = result.conversation || null;
         }
 
         async function applyConversationStatus(status) {
-            if (!activeChatConversationId) return;
+            const activeConversationId = getActiveChatConversationId();
+            if (!activeConversationId) return;
 
-            await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/status`, {
+            await api(`/api/admin/chats/${encodeURIComponent(activeConversationId)}/status`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
             });
 
             await refreshChatDataOnly();
-            await openAdminConversation(activeChatConversationId);
+            await openAdminConversation(activeConversationId);
         }
 
         async function deleteActiveConversation() {
-            if (!activeChatConversationId) return;
+            const activeConversationId = getActiveChatConversationId();
+            if (!activeConversationId) return;
             const confirmed = confirm('Konversation wirklich löschen?');
             if (!confirmed) return;
 
-            await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}`, {
+            await api(`/api/admin/chats/${encodeURIComponent(activeConversationId)}`, {
                 method: 'DELETE'
             });
 
             await refreshChatDataOnly();
-            if (activeChatConversationId) {
-                await openAdminConversation(activeChatConversationId);
+            const remainingActiveId = getActiveChatConversationId();
+            if (remainingActiveId) {
+                await openAdminConversation(remainingActiveId);
             } else {
                 document.getElementById('chatsTable').innerHTML = renderChats();
                 bindChatReplyForm();
@@ -1319,7 +1375,8 @@
 
         async function submitChatReply(event) {
             event.preventDefault();
-            if (!activeChatConversationId) return;
+            const activeConversationId = getActiveChatConversationId();
+            if (!activeConversationId) return;
 
             const input = document.getElementById('chatReplyInput');
             const text = String(input?.value || '').trim();
@@ -1333,7 +1390,7 @@
                 });
             } else {
                 const currentAdminDisplayName = syncAdminDisplayNameFromInput();
-                await api(`/api/admin/chats/${encodeURIComponent(activeChatConversationId)}/reply`, {
+                await api(`/api/admin/chats/${encodeURIComponent(activeConversationId)}/reply`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1346,7 +1403,7 @@
             input.value = '';
             editingChatMessageId = null;
             await refreshChatDataOnly();
-            await openAdminConversation(activeChatConversationId);
+            await openAdminConversation(activeConversationId);
         }
 
         function bindChatReplyForm() {
@@ -1416,21 +1473,26 @@
 
         async function refreshChatDataOnly() {
             const chatsRes = await api('/api/admin/chats');
-            adminChatThreads = chatsRes.conversations || [];
+            const allConversations = chatsRes.conversations || [];
+            adminLiveChatThreads = allConversations.filter((conversation) => !conversation.user_id);
+            adminMessageThreads = allConversations.filter((conversation) => Boolean(conversation.user_id));
 
-            if (!adminChatThreads.length) {
-                activeChatConversationId = '';
+            const scopedThreads = getChatThreadsByScope(activeChatScope);
+            const activeConversationId = getActiveChatConversationId();
+
+            if (!scopedThreads.length) {
+                setActiveChatConversationId('');
                 activeChatMessages = [];
                 activeChatConversationMeta = null;
                 return;
             }
 
-            const stillExists = adminChatThreads.some(
-                (conversation) => String(conversation.conversation_id) === String(activeChatConversationId)
+            const stillExists = scopedThreads.some(
+                (conversation) => String(conversation.conversation_id) === String(activeConversationId)
             );
 
             if (!stillExists) {
-                activeChatConversationId = String(adminChatThreads[0].conversation_id);
+                setActiveChatConversationId(String(scopedThreads[0].conversation_id));
                 activeChatMessages = [];
             }
         }
@@ -1464,20 +1526,26 @@
             adminUsers = usersRes.users || [];
             adminJobs = jobsRes.jobs || [];
             adminAppointments = appointmentsRes.termine || [];
-            adminChatThreads = chatsRes.conversations || [];
+            const allConversations = chatsRes.conversations || [];
+            adminLiveChatThreads = allConversations.filter((conversation) => !conversation.user_id);
+            adminMessageThreads = allConversations.filter((conversation) => Boolean(conversation.user_id));
 
-            const hasActiveConversation = adminChatThreads.some(
-                (conversation) => String(conversation.conversation_id) === String(activeChatConversationId)
-            );
-            if (!hasActiveConversation) {
-                activeChatConversationId = adminChatThreads.length
-                    ? String(adminChatThreads[0].conversation_id)
-                    : '';
-                activeChatMessages = [];
+            for (const scope of ['livechats', 'chats']) {
+                const scopedThreads = getChatThreadsByScope(scope);
+                const activeIdForScope = String(activeChatConversationIds[scope] || '');
+                const exists = scopedThreads.some((conversation) => String(conversation.conversation_id) === activeIdForScope);
+                if (!exists) {
+                    activeChatConversationIds[scope] = scopedThreads.length
+                        ? String(scopedThreads[0].conversation_id)
+                        : '';
+                }
             }
 
-            if (activeChatConversationId) {
+            if (getActiveChatConversationId()) {
                 await refreshActiveConversationMessages();
+            } else {
+                activeChatMessages = [];
+                activeChatConversationMeta = null;
             }
 
             document.getElementById('usersTable').innerHTML = renderUsers(usersRes.users);
@@ -1642,9 +1710,9 @@
                             await refreshAppointmentsDataOnly();
                         }
 
-                        if (activeAdminTab === 'chats') {
+                        if (activeAdminTab === 'chats' || activeAdminTab === 'livechats') {
                             await refreshChatDataOnly();
-                            if (activeChatConversationId) {
+                            if (getActiveChatConversationId()) {
                                 await refreshActiveConversationMessages();
                             }
 
