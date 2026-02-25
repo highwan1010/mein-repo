@@ -207,6 +207,56 @@
             background: var(--white);
         }
 
+        .chat-admin-layout.scope-messages .chat-admin-sidebar {
+            background: var(--light);
+            border-color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-thread-item:hover,
+        .chat-admin-layout.scope-messages .chat-thread-item.active {
+            border-color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-admin-main {
+            border-color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-admin-header {
+            background: linear-gradient(135deg, var(--secondary), var(--accent));
+            color: var(--white);
+            border-bottom-color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-admin-header small {
+            color: var(--white);
+            opacity: 0.9;
+        }
+
+        .chat-admin-layout.scope-messages .chat-live-panel {
+            background: linear-gradient(180deg, var(--white), var(--light));
+        }
+
+        .chat-admin-layout.scope-messages .chat-live-panel-title {
+            color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-admin-controls,
+        .chat-admin-layout.scope-messages .chat-admin-name-row {
+            border-color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-admin-messages {
+            background: var(--light);
+        }
+
+        .chat-admin-layout.scope-messages .chat-message-admin {
+            border-color: var(--secondary);
+        }
+
+        .chat-admin-layout.scope-messages .chat-admin-form {
+            border-top: 1px solid var(--secondary);
+        }
+
         .chat-empty {
             color: var(--gray);
             text-align: center;
@@ -1243,6 +1293,9 @@
         function renderChats() {
             const scopedThreads = getChatThreadsByScope(activeChatScope);
             const activeConversationId = getActiveChatConversationId();
+            const isMessagesScope = activeChatScope === 'chats';
+            const layoutScopeClass = isMessagesScope ? 'scope-messages' : 'scope-livechat';
+            const panelTitle = isMessagesScope ? 'Nachrichten-Funktionen' : 'Live-Funktionen';
 
             const activeConversation = scopedThreads.find(
                 (conversation) => String(conversation.conversation_id) === String(activeConversationId)
@@ -1253,7 +1306,7 @@
             const conversationBlocked = ['geschlossen', 'erledigt'].includes(statusInfo.key);
 
             return `
-                <div class="chat-admin-layout">
+                <div class="chat-admin-layout ${layoutScopeClass}">
                     <aside class="chat-admin-sidebar" id="chatThreadList">
                         ${renderChatThreads()}
                     </aside>
@@ -1266,7 +1319,7 @@
                             </div>
                         </div>
                         <div class="chat-live-panel">
-                            <div class="chat-live-panel-title">Live-Funktionen</div>
+                            <div class="chat-live-panel-title">${escapeHtml(panelTitle)}</div>
                             <div class="chat-admin-controls">
                                 <select class="form-input" id="chatConversationStatus" ${activeConversation ? '' : 'disabled'}>
                                     <option value="offen" ${statusInfo.key === 'offen' ? 'selected' : ''}>Offen</option>
