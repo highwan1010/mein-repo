@@ -17,6 +17,55 @@
             flex-wrap: wrap;
         }
 
+        .dashboard-chat-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+
+        .dashboard-conversation-list {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--white);
+            padding: 8px;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .dashboard-conversation-item {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--white);
+            text-align: left;
+            padding: 9px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .dashboard-conversation-item.active {
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .dashboard-conversation-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+            color: var(--gray);
+            font-size: 12px;
+        }
+
+        .dashboard-conversation-preview {
+            color: var(--gray);
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .dashboard-chat-status {
             display: flex;
             align-items: center;
@@ -102,6 +151,10 @@
         }
 
         @media (max-width: 700px) {
+            .dashboard-chat-layout {
+                grid-template-columns: 1fr;
+            }
+
             .dashboard-chat-form {
                 grid-template-columns: 1fr;
             }
@@ -233,20 +286,31 @@
 
                 <div id="messagesTabPane" style="display:none;">
                     <h2 style="margin-bottom: 10px;">Nachrichten mit Admin</h2>
-                    <div class="dashboard-chat-toolbar">
-                        <div class="dashboard-chat-status">
-                            <span class="badge" id="messagesStatusBadge">Lade...</span>
-                            <span id="messagesStatusText">Verbindung wird vorbereitet...</span>
+                    <div class="dashboard-chat-layout">
+                        <aside>
+                            <div style="font-weight: 700; margin-bottom: 8px;">Verlauf</div>
+                            <div id="dashboardConversationList" class="dashboard-conversation-list">
+                                <div class="dashboard-chat-empty">Lade Verlauf...</div>
+                            </div>
+                        </aside>
+
+                        <div>
+                            <div class="dashboard-chat-toolbar">
+                                <div class="dashboard-chat-status">
+                                    <span class="badge" id="messagesStatusBadge">Lade...</span>
+                                    <span id="messagesStatusText">Verbindung wird vorbereitet...</span>
+                                </div>
+                                <button class="btn-secondary" type="button" id="newConversationBtn">Neues Gespräch starten</button>
+                            </div>
+                            <div id="dashboardMessageList" class="dashboard-chat-list">
+                                <div class="dashboard-chat-empty">Lade Nachrichten...</div>
+                            </div>
+                            <form id="dashboardMessageForm" class="dashboard-chat-form">
+                                <input class="form-input" id="dashboardMessageInput" type="text" maxlength="1200" placeholder="Nachricht an Admin schreiben..." />
+                                <button class="btn-primary" type="submit">Senden</button>
+                            </form>
                         </div>
-                        <button class="btn-secondary" type="button" id="newConversationBtn">Neues Gespräch starten</button>
                     </div>
-                    <div id="dashboardMessageList" class="dashboard-chat-list">
-                        <div class="dashboard-chat-empty">Lade Nachrichten...</div>
-                    </div>
-                    <form id="dashboardMessageForm" class="dashboard-chat-form">
-                        <input class="form-input" id="dashboardMessageInput" type="text" maxlength="1200" placeholder="Nachricht an Admin schreiben..." />
-                        <button class="btn-primary" type="submit">Senden</button>
-                    </form>
                 </div>
 
             </section>
@@ -448,6 +512,52 @@
             }
         }
 
+        function formatConversationPreview(conversation) {
+            const hasAdminLatest = Boolean(conversation && conversation.letzte_nachricht_von_admin);
+            const sender = hasAdminLatest
+                ? (conversation.letzte_admin_anzeige_name || 'Admin')
+                : 'Sie';
+            const text = String((conversation && conversation.letzte_nachricht) || '').trim();
+            if (!text) {
+                return 'Noch keine Nachrichten';
+            }
+            return `${sender}: ${text}`;
+        }
+
+        function renderDashboardConversationList() {
+            const container = document.getElementById('dashboardConversationList');
+            if (!container) return;
+
+            const conversations = latestDashboardConversations || [];
+            if (!conversations.length) {
+                container.innerHTML = '<div class="dashboard-chat-empty">Noch kein Verlauf vorhanden.</div>';
+                return;
+            }
+
+            container.innerHTML = conversations.map((conversation) => {
+                const conversationId = String(conversation.conversation_id || '');
+                const isActive = conversationId === String(activeDashboardConversationId || '');
+                const statusInfo = formatConversationStatus(conversation.conversation_status || 'offen');
+                return `
+                    <button type="button" class="dashboard-conversation-item ${isActive ? 'active' : ''}" onclick="selectDashboardConversation('${escapeHtml(conversationId)}')">
+                        <div class="dashboard-conversation-meta">
+                            <strong>${escapeHtml(statusInfo.label)}</strong>
+                            <span>${escapeHtml(formatDateTime(conversation.letzte_nachricht_am))}</span>
+                        </div>
+                        <div class="dashboard-conversation-preview">${escapeHtml(formatConversationPreview(conversation))}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        async function selectDashboardConversation(conversationId) {
+            activeDashboardConversationId = String(conversationId || '');
+            await loadDashboardMessages();
+            renderDashboardConversationList();
+        }
+
+        window.selectDashboardConversation = selectDashboardConversation;
+
         async function refreshMessagesUnreadBadge() {
             const result = await api('/api/chat/conversations');
             const conversations = Array.isArray(result.conversations)
@@ -455,6 +565,7 @@
                 : [];
 
             latestDashboardConversations = conversations;
+            renderDashboardConversationList();
 
             if (currentDashboardTab === 'messages') {
                 markConversationsAsSeen(conversations);
@@ -721,6 +832,7 @@
             activeDashboardConversationMeta = null;
             activeDashboardMessages = [];
             renderDashboardMessages();
+            renderDashboardConversationList();
         }
 
         async function loadDashboardConversations() {
@@ -743,6 +855,8 @@
                 markConversationsAsSeen(availableConversations);
                 updateMessagesUnreadBadge(0);
             }
+
+            renderDashboardConversationList();
         }
 
         async function loadDashboardMessages() {
