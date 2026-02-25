@@ -7,6 +7,106 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        .dashboard-chat-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .dashboard-chat-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--gray);
+            font-size: 13px;
+        }
+
+        .dashboard-chat-list {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--light);
+            min-height: 320px;
+            max-height: 460px;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .dashboard-chat-message {
+            max-width: 82%;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            background: var(--white);
+        }
+
+        .dashboard-chat-message.mine {
+            margin-left: auto;
+            border-color: var(--primary);
+        }
+
+        .dashboard-chat-message.admin {
+            margin-right: auto;
+        }
+
+        .dashboard-chat-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--gray);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-chat-text {
+            color: var(--dark);
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        .dashboard-chat-empty {
+            color: var(--gray);
+            text-align: center;
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            background: var(--white);
+            padding: 20px;
+        }
+
+        .dashboard-chat-form {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+        }
+
+        .dashboard-tab-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: var(--danger);
+            color: var(--white);
+            font-size: 12px;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+
+        @media (max-width: 700px) {
+            .dashboard-chat-form {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -118,6 +218,7 @@
                 <div style="display:flex; gap:10px; margin-bottom: 12px;">
                     <button class="btn-primary" id="tabMainBtn" type="button" onclick="switchDashboardTab('main')">Übersicht</button>
                     <button class="btn-secondary" id="tabTasksBtn" type="button" onclick="switchDashboardTab('tasks')">Aufgaben</button>
+                    <button class="btn-secondary" id="tabMessagesBtn" type="button" onclick="switchDashboardTab('messages')">Nachrichten<span id="messagesUnreadBadge" class="dashboard-tab-badge" style="display:none;">0</span></button>
                 </div>
 
                 <div id="mainTabPane">
@@ -130,6 +231,24 @@
                     <div id="tasksContainer">Lade Aufgaben...</div>
                 </div>
 
+                <div id="messagesTabPane" style="display:none;">
+                    <h2 style="margin-bottom: 10px;">Nachrichten mit Admin</h2>
+                    <div class="dashboard-chat-toolbar">
+                        <div class="dashboard-chat-status">
+                            <span class="badge" id="messagesStatusBadge">Lade...</span>
+                            <span id="messagesStatusText">Verbindung wird vorbereitet...</span>
+                        </div>
+                        <button class="btn-secondary" type="button" id="newConversationBtn">Neues Gespräch starten</button>
+                    </div>
+                    <div id="dashboardMessageList" class="dashboard-chat-list">
+                        <div class="dashboard-chat-empty">Lade Nachrichten...</div>
+                    </div>
+                    <form id="dashboardMessageForm" class="dashboard-chat-form">
+                        <input class="form-input" id="dashboardMessageInput" type="text" maxlength="1200" placeholder="Nachricht an Admin schreiben..." />
+                        <button class="btn-primary" type="submit">Senden</button>
+                    </form>
+                </div>
+
             </section>
         </div>
     </main>
@@ -137,6 +256,18 @@
     <script src="config.js"></script>
     <script>
         let currentUser = null;
+        let dashboardChatPollHandle = null;
+        let dashboardUnreadPollHandle = null;
+        let activeDashboardConversationId = '';
+        let activeDashboardConversationMeta = null;
+        let activeDashboardMessages = [];
+        let latestDashboardConversations = [];
+        let currentDashboardTab = 'main';
+        let hasInitializedUnreadState = false;
+        let lastUnreadCount = 0;
+        const DASHBOARD_CHAT_POLL_INTERVAL_MS = 7000;
+        const DASHBOARD_UNREAD_POLL_INTERVAL_MS = 10000;
+        const DASHBOARD_CHAT_SEEN_STORAGE_KEY = 'jc_dashboard_chat_seen_v1';
         const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL)
             ? String(window.APP_CONFIG.API_BASE_URL).replace(/\/$/, '')
             : '';
@@ -155,6 +286,185 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Fehler');
             return data;
+        }
+
+        function loadSeenConversationsMap() {
+            try {
+                const raw = localStorage.getItem(DASHBOARD_CHAT_SEEN_STORAGE_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch {
+                return {};
+            }
+        }
+
+        function saveSeenConversationsMap(mapValue) {
+            localStorage.setItem(DASHBOARD_CHAT_SEEN_STORAGE_KEY, JSON.stringify(mapValue || {}));
+        }
+
+        function playNotificationTone() {
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) return;
+
+                const audioContext = new AudioContextClass();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.02);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.18);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+                oscillator.onended = () => {
+                    audioContext.close().catch(() => {});
+                };
+            } catch {
+                // Ton ist optional
+            }
+        }
+
+        async function requestBrowserNotificationPermission() {
+            if (!('Notification' in window)) return 'unsupported';
+            if (Notification.permission === 'granted') return 'granted';
+            if (Notification.permission === 'denied') return 'denied';
+
+            try {
+                const result = await Notification.requestPermission();
+                return result;
+            } catch {
+                return 'denied';
+            }
+        }
+
+        function showBrowserNotification(unreadCount) {
+            if (!('Notification' in window)) return;
+            if (Notification.permission !== 'granted') return;
+
+            try {
+                const title = unreadCount > 1
+                    ? `${unreadCount} neue Admin-Nachrichten`
+                    : 'Neue Admin-Nachricht';
+                const notification = new Notification(title, {
+                    body: 'Öffne das Dashboard und gehe zu „Nachrichten“.',
+                    tag: 'jobvermittlung-dashboard-chat',
+                    renotify: true
+                });
+
+                notification.onclick = () => {
+                    window.focus();
+                    switchDashboardTab('messages');
+                    notification.close();
+                };
+            } catch {
+                // Browser-Hinweis ist optional
+            }
+        }
+
+        function updateMessagesUnreadBadge(count) {
+            const badge = document.getElementById('messagesUnreadBadge');
+            if (!badge) return;
+            const safeCount = Number.isFinite(Number(count)) ? Math.max(0, Number(count)) : 0;
+            badge.style.display = safeCount > 0 ? 'inline-flex' : 'none';
+            badge.textContent = safeCount > 99 ? '99+' : String(safeCount);
+        }
+
+        function handleUnreadNotifications(unreadCount) {
+            const safeUnreadCount = Number.isFinite(Number(unreadCount)) ? Math.max(0, Number(unreadCount)) : 0;
+
+            if (!hasInitializedUnreadState) {
+                hasInitializedUnreadState = true;
+                lastUnreadCount = safeUnreadCount;
+                return;
+            }
+
+            const hasNewUnread = safeUnreadCount > lastUnreadCount;
+            lastUnreadCount = safeUnreadCount;
+
+            if (!hasNewUnread || currentDashboardTab === 'messages') {
+                return;
+            }
+
+            playNotificationTone();
+
+            if (document.visibilityState === 'hidden') {
+                showBrowserNotification(safeUnreadCount);
+            }
+        }
+
+        function getUnreadConversationsCount(conversations) {
+            const seenMap = loadSeenConversationsMap();
+            return (conversations || []).reduce((count, conversation) => {
+                const conversationId = String(conversation.conversation_id || '');
+                const hasAdminLatest = Boolean(conversation.letzte_nachricht_von_admin);
+                const latestAt = String(conversation.letzte_nachricht_am || '');
+                if (!conversationId || !hasAdminLatest || !latestAt) {
+                    return count;
+                }
+
+                const seenAt = String(seenMap[conversationId] || '');
+                const latestDate = new Date(latestAt);
+                const seenDate = new Date(seenAt);
+                const isLatestDateValid = !Number.isNaN(latestDate.getTime());
+                const isSeenDateValid = !Number.isNaN(seenDate.getTime());
+
+                if (!isLatestDateValid) {
+                    return count;
+                }
+
+                if (!isSeenDateValid || latestDate > seenDate) {
+                    return count + 1;
+                }
+
+                return count;
+            }, 0);
+        }
+
+        function markConversationsAsSeen(conversations) {
+            const seenMap = loadSeenConversationsMap();
+            let hasChanges = false;
+
+            for (const conversation of (conversations || [])) {
+                const conversationId = String(conversation.conversation_id || '');
+                const latestAt = String(conversation.letzte_nachricht_am || '');
+                if (!conversationId || !latestAt) {
+                    continue;
+                }
+
+                if (!seenMap[conversationId] || new Date(latestAt) > new Date(String(seenMap[conversationId] || ''))) {
+                    seenMap[conversationId] = latestAt;
+                    hasChanges = true;
+                }
+            }
+
+            if (hasChanges) {
+                saveSeenConversationsMap(seenMap);
+            }
+        }
+
+        async function refreshMessagesUnreadBadge() {
+            const result = await api('/api/chat/conversations');
+            const conversations = Array.isArray(result.conversations)
+                ? result.conversations.filter((item) => !item.conversation_deleted)
+                : [];
+
+            latestDashboardConversations = conversations;
+
+            if (currentDashboardTab === 'messages') {
+                markConversationsAsSeen(conversations);
+                updateMessagesUnreadBadge(0);
+                return;
+            }
+
+            const unreadCount = getUnreadConversationsCount(conversations);
+            updateMessagesUnreadBadge(unreadCount);
+            handleUnreadNotifications(unreadCount);
         }
 
         async function loadCurrentUser() {
@@ -303,6 +613,235 @@
             }
         }
 
+        function getCurrentUserChatIdentity() {
+            if (!currentUser) return null;
+            const vorname = String(currentUser.vorname || '').trim();
+            const nachname = String(currentUser.nachname || '').trim();
+            const email = String(currentUser.email || '').trim().toLowerCase();
+            if (!vorname || !nachname || !email) {
+                return null;
+            }
+            return { vorname, nachname, email };
+        }
+
+        function formatDateTime(value) {
+            if (!value) return '—';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '—';
+            return date.toLocaleString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatConversationStatus(status) {
+            const normalized = String(status || 'offen').trim().toLowerCase();
+            if (normalized === 'in_bearbeitung') return { key: 'warning', label: 'In Bearbeitung', text: 'Admin bearbeitet Ihre Anfrage.' };
+            if (normalized === 'erledigt') return { key: 'success', label: 'Erledigt', text: 'Gespräch wurde als erledigt markiert.' };
+            if (normalized === 'geschlossen') return { key: 'danger', label: 'Geschlossen', text: 'Gespräch wurde geschlossen.' };
+            return { key: '', label: 'Offen', text: 'Sie können direkt an das Adminpanel schreiben.' };
+        }
+
+        function isConversationLocked() {
+            if (!activeDashboardConversationMeta) return false;
+            const normalized = String(activeDashboardConversationMeta.conversation_status || 'offen').trim().toLowerCase();
+            return Boolean(activeDashboardConversationMeta.conversation_deleted) || ['geschlossen', 'erledigt'].includes(normalized);
+        }
+
+        function renderDashboardMessages() {
+            const list = document.getElementById('dashboardMessageList');
+            const statusBadge = document.getElementById('messagesStatusBadge');
+            const statusText = document.getElementById('messagesStatusText');
+            const input = document.getElementById('dashboardMessageInput');
+            const submitButton = document.querySelector('#dashboardMessageForm button[type="submit"]');
+
+            const statusInfo = formatConversationStatus(activeDashboardConversationMeta?.conversation_status || 'offen');
+            statusBadge.textContent = statusInfo.label;
+            statusBadge.className = statusInfo.key ? `badge ${statusInfo.key}` : 'badge';
+            statusText.textContent = statusInfo.text;
+
+            const locked = isConversationLocked();
+            input.disabled = locked;
+            submitButton.disabled = locked;
+            input.placeholder = locked
+                ? 'Konversation ist geschlossen/erledigt. Bitte neues Gespräch starten.'
+                : 'Nachricht an Admin schreiben...';
+
+            if (!activeDashboardConversationId) {
+                list.innerHTML = '<div class="dashboard-chat-empty">Noch kein Gespräch vorhanden. Starten Sie ein neues Gespräch.</div>';
+                return;
+            }
+
+            if (!activeDashboardMessages.length) {
+                list.innerHTML = '<div class="dashboard-chat-empty">Noch keine Nachrichten vorhanden.</div>';
+                return;
+            }
+
+            const currentUserFullName = `${currentUser?.vorname || ''} ${currentUser?.nachname || ''}`.trim() || 'Sie';
+
+            list.innerHTML = activeDashboardMessages.map((message) => {
+                const isAdmin = Boolean(message.admin_id);
+                const bubbleClass = isAdmin ? 'dashboard-chat-message admin' : 'dashboard-chat-message mine';
+                const sender = isAdmin
+                    ? (message.admin_anzeige_name || 'Admin')
+                    : (message.visitor_vorname && message.visitor_nachname
+                        ? `${message.visitor_vorname} ${message.visitor_nachname}`
+                        : currentUserFullName);
+
+                return `
+                    <div class="${bubbleClass}">
+                        <div class="dashboard-chat-meta">
+                            <strong>${escapeHtml(sender)}</strong>
+                            <span>${escapeHtml(formatDateTime(message.erstellt_am))}</span>
+                        </div>
+                        <div class="dashboard-chat-text">${escapeHtml(message.nachricht || '')}</div>
+                    </div>
+                `;
+            }).join('');
+
+            list.scrollTop = list.scrollHeight;
+        }
+
+        async function createNewDashboardConversation() {
+            const identity = getCurrentUserChatIdentity();
+            if (!identity) {
+                throw new Error('Profildaten für den Chat fehlen. Bitte Profil prüfen.');
+            }
+
+            const result = await api('/api/chat/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(identity)
+            });
+
+            activeDashboardConversationId = String(result.conversationId || '');
+            activeDashboardConversationMeta = null;
+            activeDashboardMessages = [];
+            renderDashboardMessages();
+        }
+
+        async function loadDashboardConversations() {
+            const result = await api('/api/chat/conversations');
+            const conversations = Array.isArray(result.conversations) ? result.conversations : [];
+            const availableConversations = conversations.filter((item) => !item.conversation_deleted);
+            latestDashboardConversations = availableConversations;
+
+            if (!activeDashboardConversationId || !availableConversations.some((item) => String(item.conversation_id) === String(activeDashboardConversationId))) {
+                activeDashboardConversationId = availableConversations.length
+                    ? String(availableConversations[0].conversation_id)
+                    : '';
+            }
+
+            if (!activeDashboardConversationId && getCurrentUserChatIdentity()) {
+                await createNewDashboardConversation();
+            }
+
+            if (currentDashboardTab === 'messages') {
+                markConversationsAsSeen(availableConversations);
+                updateMessagesUnreadBadge(0);
+            }
+        }
+
+        async function loadDashboardMessages() {
+            if (!activeDashboardConversationId) {
+                activeDashboardMessages = [];
+                activeDashboardConversationMeta = null;
+                renderDashboardMessages();
+                return;
+            }
+
+            const result = await api(`/api/chat/messages?conversationId=${encodeURIComponent(activeDashboardConversationId)}`);
+            activeDashboardMessages = Array.isArray(result.messages) ? result.messages : [];
+            activeDashboardConversationMeta = result.conversation || null;
+            renderDashboardMessages();
+        }
+
+        async function refreshDashboardMessages() {
+            await loadDashboardConversations();
+            await loadDashboardMessages();
+        }
+
+        function stopDashboardChatPolling() {
+            if (dashboardChatPollHandle) {
+                clearInterval(dashboardChatPollHandle);
+                dashboardChatPollHandle = null;
+            }
+        }
+
+        function startDashboardChatPolling() {
+            stopDashboardChatPolling();
+            dashboardChatPollHandle = setInterval(async () => {
+                try {
+                    await refreshDashboardMessages();
+                } catch {
+                    // Polling-Fehler werden bei nächstem Intervall erneut versucht
+                }
+            }, DASHBOARD_CHAT_POLL_INTERVAL_MS);
+        }
+
+        function stopDashboardUnreadPolling() {
+            if (dashboardUnreadPollHandle) {
+                clearInterval(dashboardUnreadPollHandle);
+                dashboardUnreadPollHandle = null;
+            }
+        }
+
+        function startDashboardUnreadPolling() {
+            stopDashboardUnreadPolling();
+            dashboardUnreadPollHandle = setInterval(async () => {
+                try {
+                    await refreshMessagesUnreadBadge();
+                } catch {
+                    // Fehler beim Badge-Polling werden automatisch erneut versucht
+                }
+            }, DASHBOARD_UNREAD_POLL_INTERVAL_MS);
+        }
+
+        function bindDashboardMessageEvents() {
+            document.getElementById('dashboardMessageForm').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const input = document.getElementById('dashboardMessageInput');
+                const text = String(input.value || '').trim();
+                if (!text) return;
+
+                if (!activeDashboardConversationId) {
+                    await createNewDashboardConversation();
+                }
+
+                try {
+                    await api('/api/chat/messages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversationId: activeDashboardConversationId,
+                            nachricht: text
+                        })
+                    });
+
+                    input.value = '';
+                    await refreshDashboardMessages();
+                } catch (error) {
+                    alert(error.message || 'Nachricht konnte nicht gesendet werden.');
+                }
+            });
+
+            document.getElementById('newConversationBtn').addEventListener('click', async () => {
+                try {
+                    await createNewDashboardConversation();
+                    await refreshDashboardMessages();
+                } catch (error) {
+                    alert(error.message || 'Neues Gespräch konnte nicht gestartet werden.');
+                }
+            });
+
+            document.getElementById('tabMessagesBtn').addEventListener('click', () => {
+                requestBrowserNotificationPermission().catch(() => {});
+            });
+        }
+
         async function markTaskDone(taskId) {
             try {
                 await api(`/api/tasks/${taskId}/status`, {
@@ -317,28 +856,50 @@
         }
 
         function switchDashboardTab(tab) {
+            currentDashboardTab = tab;
             const mainPane = document.getElementById('mainTabPane');
             const taskPane = document.getElementById('tasksTabPane');
+            const messagesPane = document.getElementById('messagesTabPane');
             const mainBtn = document.getElementById('tabMainBtn');
             const tasksBtn = document.getElementById('tabTasksBtn');
+            const messagesBtn = document.getElementById('tabMessagesBtn');
 
             if (tab === 'tasks') {
                 mainPane.style.display = 'none';
                 taskPane.style.display = 'block';
+                messagesPane.style.display = 'none';
                 mainBtn.className = 'btn-secondary';
                 tasksBtn.className = 'btn-primary';
+                messagesBtn.className = 'btn-secondary';
+                stopDashboardChatPolling();
+            } else if (tab === 'messages') {
+                mainPane.style.display = 'none';
+                taskPane.style.display = 'none';
+                messagesPane.style.display = 'block';
+                mainBtn.className = 'btn-secondary';
+                tasksBtn.className = 'btn-secondary';
+                messagesBtn.className = 'btn-primary';
+                refreshDashboardMessages().catch(() => {
+                    document.getElementById('dashboardMessageList').innerHTML = '<div class="dashboard-chat-empty">Nachrichten konnten nicht geladen werden.</div>';
+                });
+                startDashboardChatPolling();
+                markConversationsAsSeen(latestDashboardConversations);
+                updateMessagesUnreadBadge(0);
             } else {
                 mainPane.style.display = 'block';
                 taskPane.style.display = 'none';
+                messagesPane.style.display = 'none';
                 mainBtn.className = 'btn-primary';
                 tasksBtn.className = 'btn-secondary';
+                messagesBtn.className = 'btn-secondary';
+                stopDashboardChatPolling();
             }
         }
 
         function getInitialDashboardTab() {
             const params = new URLSearchParams(window.location.search);
             const tab = String(params.get('tab') || '').trim().toLowerCase();
-            if (tab === 'tasks') {
+            if (tab === 'tasks' || tab === 'messages') {
                 return tab;
             }
             return 'main';
@@ -394,11 +955,15 @@
             window.location.href = 'index.html';
         });
 
+        bindDashboardMessageEvents();
+
         (async () => {
             try {
                 await loadCurrentUser();
                 await loadData();
                 await loadTasks();
+                await refreshMessagesUnreadBadge();
+                startDashboardUnreadPolling();
                 switchDashboardTab(getInitialDashboardTab());
             } catch (err) {
                 alert(err.message);
